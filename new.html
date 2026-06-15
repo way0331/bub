@@ -65,7 +65,7 @@
         </div>
 
         <div id="game-container">
-            <canvas id="gameCanvas" width="600" height="520"></canvas>
+            <canvas id="gameCanvas" width="720" height="624"></canvas>
         </div>
 
         <!-- Player 2 Stats -->
@@ -177,10 +177,11 @@ let aiEscapeExtraBombs = [];
 let localBombReqCounter = 0;
 let lastBombReqs = { 2: 0, 3: 0, 4: 0 };
 let teams = null;
+let currentRoundId = null;
 
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
-const TILE_SIZE = 40;
+const TILE_SIZE = 48;
 const ROWS = 13;
 const COLS = 15;
 
@@ -201,36 +202,50 @@ const INITIAL_MAP = [
 ];
 
 const MAP_VARIANTS = [
-    INITIAL_MAP,
     [
-        [0,0,0,0,1,2,2,2,1,0,0,0,0,0,0],
-        [0,1,2,1,2,1,2,1,2,1,2,1,2,1,0],
-        [0,2,2,2,2,2,0,2,0,2,2,2,2,2,0],
-        [0,1,2,1,0,1,2,1,2,1,0,1,2,1,0],
-        [1,2,0,2,2,2,2,0,2,2,2,2,0,2,1],
-        [2,1,2,1,2,1,2,1,2,1,2,1,2,1,2],
-        [2,2,0,2,2,0,2,2,2,0,2,2,0,2,2],
-        [2,1,2,1,2,1,2,1,2,1,2,1,2,1,2],
-        [1,2,0,2,2,2,2,0,2,2,2,2,0,2,1],
-        [0,1,2,1,0,1,2,1,2,1,0,1,2,1,0],
-        [0,2,2,2,2,2,0,2,0,2,2,2,2,2,0],
-        [0,1,2,1,2,1,2,1,2,1,2,1,2,1,0],
-        [0,0,0,0,1,2,2,2,1,0,0,0,0,0,0],
+        [0,0,0,0,0,4,4,4,0,0,0,0,0,0,0],
+        [0,2,2,4,0,2,2,4,0,2,2,4,2,2,0],
+        [0,2,3,3,3,3,0,0,0,3,3,3,3,2,0],
+        [0,4,3,2,2,0,0,2,0,0,2,2,3,4,0],
+        [0,2,3,0,1,0,2,2,2,0,1,0,3,2,0],
+        [4,2,3,0,0,0,2,1,2,0,0,0,3,2,4],
+        [4,0,0,2,2,0,0,0,0,0,2,2,0,0,4],
+        [4,2,3,0,0,0,2,1,2,0,0,0,3,2,4],
+        [0,2,3,0,1,0,2,2,2,0,1,0,3,2,0],
+        [0,4,3,2,2,0,0,2,0,0,2,2,3,4,0],
+        [0,2,3,3,3,3,0,0,0,3,3,3,3,2,0],
+        [0,2,2,4,0,2,2,4,0,2,2,4,2,2,0],
+        [0,0,0,0,0,4,4,4,0,0,0,0,0,0,0],
     ],
     [
-        [0,0,0,0,1,2,0,2,1,2,0,0,0,0,0],
-        [0,1,2,1,2,1,2,1,2,1,2,1,2,1,0],
-        [0,2,0,2,0,2,2,2,2,2,0,2,0,2,0],
-        [0,1,2,1,2,1,0,1,0,1,2,1,2,1,0],
-        [1,2,0,2,2,2,2,0,2,2,2,2,0,2,1],
-        [2,1,2,1,0,1,2,1,2,1,0,1,2,1,2],
-        [0,2,2,0,2,2,2,2,2,2,2,0,2,2,0],
-        [2,1,2,1,0,1,2,1,2,1,0,1,2,1,2],
-        [1,2,0,2,2,2,2,0,2,2,2,2,0,2,1],
-        [0,1,2,1,2,1,0,1,0,1,2,1,2,1,0],
-        [0,2,0,2,0,2,2,2,2,2,0,2,0,2,0],
-        [0,1,2,1,2,1,2,1,2,1,2,1,2,1,0],
-        [0,0,0,0,1,2,0,2,1,2,0,0,0,0,0],
+        [0,0,0,4,2,0,0,0,0,0,2,4,0,0,0],
+        [0,2,0,4,2,2,0,1,0,2,2,4,0,2,0],
+        [0,2,0,4,0,0,0,0,0,0,0,4,0,2,0],
+        [4,2,0,2,0,3,3,3,3,3,0,2,0,2,4],
+        [2,2,0,0,0,3,2,0,2,3,0,0,0,2,2],
+        [0,0,0,2,0,3,0,1,0,3,0,2,0,0,0],
+        [0,1,0,2,0,3,0,0,0,3,0,2,0,1,0],
+        [0,0,0,2,0,3,0,1,0,3,0,2,0,0,0],
+        [2,2,0,0,0,3,2,0,2,3,0,0,0,2,2],
+        [4,2,0,2,0,3,3,3,3,3,0,2,0,2,4],
+        [0,2,0,4,0,0,0,0,0,0,0,4,0,2,0],
+        [0,2,0,4,2,2,0,1,0,2,2,4,0,2,0],
+        [0,0,0,4,2,0,0,0,0,0,2,4,0,0,0],
+    ],
+    [
+        [0,0,0,0,2,4,0,0,0,4,2,0,0,0,0],
+        [0,2,2,0,2,4,0,3,0,4,2,0,2,2,0],
+        [0,2,0,0,0,4,0,3,0,4,0,0,0,2,0],
+        [0,0,0,2,0,0,0,3,0,0,0,2,0,0,0],
+        [2,2,0,2,2,2,0,3,0,2,2,2,0,2,2],
+        [4,4,0,0,0,0,0,3,0,0,0,0,0,4,4],
+        [0,0,0,3,3,3,3,0,3,3,3,3,0,0,0],
+        [4,4,0,0,0,0,0,3,0,0,0,0,0,4,4],
+        [2,2,0,2,2,2,0,3,0,2,2,2,0,2,2],
+        [0,0,0,2,0,0,0,3,0,0,0,2,0,0,0],
+        [0,2,0,0,0,4,0,3,0,4,0,0,0,2,0],
+        [0,2,2,0,2,4,0,3,0,4,2,0,2,2,0],
+        [0,0,0,0,2,4,0,0,0,4,2,0,0,0,0],
     ]
 ];
 
@@ -295,7 +310,7 @@ window.addEventListener('keydown', e => {
                 let localActiveBombs = bombs.filter(b => b.ownerId === slot).length;
                 if (localActiveBombs < localPlayer.maxBombs) {
                     localBombReqCounter++;
-                    updateDoc(roomRef, { [`p${slot}BombReq`]: localBombReqCounter });
+                    updateDoc(roomRef, { [`p${slot}BombReq`]: localBombReqCounter, [`p${slot}.x`]: localPlayer.x, [`p${slot}.y`]: localPlayer.y });
                 }
             }
         }
@@ -320,6 +335,7 @@ class Player {
         this.state = 'NORMAL'; 
         this.trapTimer = 0;
         this.hasShield = false;
+        this.hasBoat = false;
         this.shieldGraceUntil = 0;
     }
 
@@ -367,7 +383,7 @@ class Player {
         for (let r = topRow; r <= bottomRow; r++) {
             for (let c = leftCol; c <= rightCol; c++) {
                 if (r >= 0 && r < ROWS && c >= 0 && c < COLS) {
-                    if (gameMap[r][c] === 1 || gameMap[r][c] === 2) return true;
+                    if (gameMap[r][c] === 1 || gameMap[r][c] === 2 || (gameMap[r][c] === 3 && !this.hasBoat)) return true;
                     // Bomb solid collision
                     for (let b of bombs) {
                         if (b.col === c && b.row === r) {
@@ -502,7 +518,7 @@ class Bomb {
 
                         // 木箱被炸掉時先不要立刻生成道具，
                         // 否則會被同一波爆炸馬上刪掉。
-                        const types = ['BOMB', 'POWER', 'SPEED', 'SHIELD'];
+                        const types = ['BOMB', 'POWER', 'SPEED', 'SHIELD', 'BOAT'];
                         const type = types[Math.floor(Math.random() * types.length)];
                         pendingItems.push({
                             col: c,
@@ -577,7 +593,7 @@ class Item {
         const y = this.row * TILE_SIZE + TILE_SIZE/2;
         const yOffset = Math.sin((Date.now() - this.creationTime) / 200) * 3;
         
-        let emoji = this.type === 'BOMB' ? '💧' : (this.type === 'POWER' ? '🧪' : (this.type === 'SPEED' ? '⛸️' : '🛡️'));
+        let emoji = this.type === 'BOMB' ? '💧' : (this.type === 'POWER' ? '🧪' : (this.type === 'SPEED' ? '⛸️' : (this.type === 'SHIELD' ? '🛡️' : '⛵')));
         ctx.font = '24px Arial';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
@@ -588,6 +604,7 @@ class Item {
         if (this.type === 'POWER') player.blastRadius = Math.min(8, player.blastRadius + 1);
         if (this.type === 'SPEED') player.speedLevel = Math.min(6, player.speedLevel + 1);
         if (this.type === 'SHIELD') player.hasShield = true;
+        if (this.type === 'BOAT') player.hasBoat = true;
         playSound('item');
     }
 }
@@ -621,7 +638,9 @@ function serializePlayer(p) {
         maxBombs: p.maxBombs,
         blastRadius: p.blastRadius,
         speedLevel: p.speedLevel,
-        hasShield: !!p.hasShield
+        hasShield: !!p.hasShield,
+        hasBoat: !!p.hasBoat,
+        trapTimer: p.trapTimer || 0
     };
 }
 
@@ -636,6 +655,8 @@ function applyPlayerData(p, data, includePosition = false) {
     p.blastRadius = data.blastRadius ?? p.blastRadius;
     p.speedLevel = data.speedLevel ?? p.speedLevel;
     p.hasShield = data.hasShield ?? p.hasShield;
+    p.hasBoat = data.hasBoat ?? p.hasBoat;
+    p.trapTimer = data.trapTimer ?? p.trapTimer;
 }
 
 function getLocalPlayerIndex() {
@@ -784,6 +805,19 @@ function drawMap() {
                 ctx.moveTo(c * TILE_SIZE + TILE_SIZE - 8, r * TILE_SIZE + 8);
                 ctx.lineTo(c * TILE_SIZE + 8, r * TILE_SIZE + TILE_SIZE - 8);
                 ctx.stroke();
+            } else if (cell === 3) {
+                ctx.fillStyle = '#38bdf8';
+                ctx.fillRect(c * TILE_SIZE, r * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+                ctx.fillStyle = 'rgba(255,255,255,0.35)';
+                ctx.beginPath();
+                ctx.arc(c * TILE_SIZE + TILE_SIZE * 0.3, r * TILE_SIZE + TILE_SIZE * 0.35, TILE_SIZE * 0.09, 0, Math.PI * 2);
+                ctx.arc(c * TILE_SIZE + TILE_SIZE * 0.7, r * TILE_SIZE + TILE_SIZE * 0.65, TILE_SIZE * 0.08, 0, Math.PI * 2);
+                ctx.fill();
+            } else if (cell === 4) {
+                ctx.fillStyle = '#22c55e';
+                ctx.fillRect(c * TILE_SIZE, r * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+                ctx.fillStyle = 'rgba(255,255,255,0.18)';
+                ctx.fillRect(c * TILE_SIZE + 6, r * TILE_SIZE + 6, TILE_SIZE - 12, TILE_SIZE - 12);
             }
         }
     }
@@ -819,6 +853,7 @@ function hasBombAt(col, row, extraBombs = []) {
 function isWalkableTile(col, row, extraBombs = [], allowStart = null) {
     if (!inBounds(col, row)) return false;
     if (gameMap[row][col] === 1 || gameMap[row][col] === 2) return false;
+    if (gameMap[row][col] === 3) return false; // AI 和路徑搜尋預設不主動走水路
     if (allowStart && allowStart.col === col && allowStart.row === row) return true;
     return !hasBombAt(col, row, extraBombs);
 }
@@ -1205,6 +1240,18 @@ function updateAI(dt) {
     moveAI(ai, aiDir);
 }
 
+function updateHostTrapTimers(dt) {
+    if (!isHost) return;
+    players.forEach((p, idx) => {
+        // 玩家1自己的 TRAPPED 倒數已經在 updateLocalMovement 裡處理，避免重複扣秒。
+        if (idx === 0) return;
+        if (p && p.state === 'TRAPPED') {
+            p.trapTimer -= dt;
+            if (p.trapTimer <= 0) p.die();
+        }
+    });
+}
+
 function update(dt) {
     if (!players.length) return;
 
@@ -1236,6 +1283,7 @@ function update(dt) {
         }
         processPendingItems();
         checkInteractions();
+        updateHostTrapTimers(dt);
         if (gameMode === 'PVP4') checkTeamVictory();
 
         lastSyncTime += dt;
@@ -1449,13 +1497,15 @@ async function createRoom(mode) {
         p1: serializePlayer(players[0]),
         p2: serializePlayer(players[1]),
         p2BombReq: 0, p3BombReq: 0, p4BombReq: 0,
-        winner: null
+        winner: null,
+        roundId: Date.now()
     };
     if (mode === 'PVP4') {
         docData.p3 = serializePlayer(players[2]);
         docData.p4 = serializePlayer(players[3]);
     }
 
+    currentRoundId = docData.roundId || Date.now();
     await setDoc(roomRef, docData);
 
     document.getElementById('display-room-code').innerText = roomId;
@@ -1607,6 +1657,7 @@ function syncAuthoritativeWorld(data, includePositions = false) {
     }
 
     teams = data.teams || teams;
+    currentRoundId = data.roundId || currentRoundId;
     currentMapIndex = data.mapIndex ?? currentMapIndex;
     gameMap = JSON.parse(data.map || JSON.stringify(gameMap));
     bombs = JSON.parse(data.bombs || '[]').map(reconstructBomb);
@@ -1645,6 +1696,7 @@ async function restartSameRoom() {
         roundId: Date.now()
     };
     players.forEach(p => payload[`p${p.id}`] = serializePlayer(p));
+    currentRoundId = payload.roundId;
     document.getElementById('ui-layer').style.display = 'none';
     await updateDoc(roomRef, payload);
     startMatch();
@@ -1655,6 +1707,15 @@ function handleNetworkUpdate(docSnap) {
     if (!data) return;
     gameMode = data.mode || gameMode;
     teams = data.teams || teams;
+
+    if (data.roundId && data.roundId !== currentRoundId) {
+        currentRoundId = data.roundId;
+        syncAuthoritativeWorld(data, true);
+        winnerId = null;
+        gameState = 'PLAYING';
+        startMatch();
+        return;
+    }
 
     if (data.status === 'PLAYING' && gameState !== 'PLAYING') {
         syncAuthoritativeWorld(data, role === 'SPECTATOR');
@@ -1678,9 +1739,15 @@ function handleNetworkUpdate(docSnap) {
                 const field = `p${i}BombReq`;
                 const val = data[field] || 0;
                 if (val > (lastBombReqs[i] || 0)) {
+                    const p = players[i-1];
+                    const pdata = data[`p${i}`];
+                    // 放水球時先使用訪客送上來的最新座標，避免水球出現在初始位置。
+                    if (p && pdata) {
+                        p.x = pdata.x ?? p.x;
+                        p.y = pdata.y ?? p.y;
+                    }
                     const diff = val - (lastBombReqs[i] || 0);
                     for (let j = 0; j < diff; j++) {
-                        const p = players[i-1];
                         if (p && p.placedBombs < p.maxBombs) p.placeBomb(true);
                     }
                     lastBombReqs[i] = val;
