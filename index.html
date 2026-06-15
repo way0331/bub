@@ -423,11 +423,11 @@ class Bomb {
                     if (cell === 2) {
                         gameMap[r][c] = 0;
                         explosions.push(new Explosion(c, r));
-                        if (Math.random() < 0.7) {
+                   
                             const types = ['BOMB', 'POWER', 'SPEED'];
                             const type = types[Math.floor(Math.random() * types.length)];
                             items.push(new Item(c, r, type));
-                        }
+                    
                         break; 
                     }
                     
