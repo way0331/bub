@@ -639,7 +639,7 @@ function update(dt) {
 
         // Host Network Sync (~10 FPS)
         lastSyncTime += dt;
-        if (lastSyncTime > 100) {
+        if (lastSyncTime > 50) {
             updateDoc(roomRef, {
                 'p1.x': players[0].x, 'p1.y': players[0].y, 'p1.state': players[0].state,
                 'p1.maxBombs': players[0].maxBombs, 'p1.blastRadius': players[0].blastRadius, 'p1.speedLevel': players[0].speedLevel,
@@ -660,7 +660,7 @@ function update(dt) {
 
         // Guest Network Sync
         lastSyncTime += dt;
-        if (lastSyncTime > 100) {
+        if (lastSyncTime > 50) {
             updateDoc(roomRef, {
                 'p2.x': localPlayer.x, 'p2.y': localPlayer.y
             });
