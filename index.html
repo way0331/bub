@@ -785,12 +785,16 @@ document.getElementById('btn-join').addEventListener('click', async () => {
     
     if (snap.exists() && snap.data().status === 'WAITING') {
         isHost = false;
-        gameState = 'PLAYING';
         roomId = code;
         initGameObjects();
+    
         await updateDoc(roomRef, { guest: userId, status: 'PLAYING' });
+    
         document.getElementById('join-error').classList.add('hidden');
+    
         unsubscribe = onSnapshot(roomRef, handleNetworkUpdate);
+    
+        startMatch();
     } else {
         document.getElementById('join-error').classList.remove('hidden');
     }
