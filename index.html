@@ -183,6 +183,7 @@ let players = [];
 let bombs = [];
 let explosions = [];
 let items = [];
+let pendingItems = []; // 木箱被炸後，等爆炸效果結束再生成的道具
 let winnerId = null;
 let lastFrameTime = 0;
 
@@ -423,11 +424,18 @@ class Bomb {
                     if (cell === 2) {
                         gameMap[r][c] = 0;
                         explosions.push(new Explosion(c, r));
-                   
-                            const types = ['BOMB', 'POWER', 'SPEED'];
-                            const type = types[Math.floor(Math.random() * types.length)];
-                            items.push(new Item(c, r, type));
-                    
+
+                        // 木箱被炸掉時先不要立刻生成道具，
+                        // 否則會被同一波爆炸馬上刪掉。
+                        const types = ['BOMB', 'POWER', 'SPEED'];
+                        const type = types[Math.floor(Math.random() * types.length)];
+                        pendingItems.push({
+                            col: c,
+                            row: r,
+                            type: type,
+                            spawnTime: Date.now() + 550
+                        });
+
                         break; 
                     }
                     
@@ -527,6 +535,33 @@ function reconstructExplosion(data) {
     const e = new Explosion(data.col, data.row);
     e.timer = data.timer;
     return e;
+}
+
+function processPendingItems() {
+    if (!isHost) return;
+
+    const now = Date.now();
+    for (let i = pendingItems.length - 1; i >= 0; i--) {
+        const pending = pendingItems[i];
+
+        if (now < pending.spawnTime) continue;
+
+        // 如果同一格還有爆炸，就再等一下，
+        // 讓道具不會從水柱裡冒出來。
+        const stillExploding = explosions.some(e => e.col === pending.col && e.row === pending.row);
+        if (stillExploding) {
+            pending.spawnTime = now + 100;
+            continue;
+        }
+
+        // 避免同一格重複生成道具。
+        const alreadyHasItem = items.some(item => item.col === pending.col && item.row === pending.row);
+        if (!alreadyHasItem) {
+            items.push(new Item(pending.col, pending.row, pending.type));
+        }
+
+        pendingItems.splice(i, 1);
+    }
 }
 
 function checkInteractions() {
@@ -635,6 +670,7 @@ function update(dt) {
             explosions[i].update(dt);
             if (explosions[i].timer <= 0) explosions.splice(i, 1);
         }
+        processPendingItems();
         checkInteractions();
 
         // Host Network Sync (~10 FPS)
@@ -702,7 +738,7 @@ function generateRoomCode() {
 
 function initGameObjects() {
     gameMap = INITIAL_MAP.map(row => [...row]);
-    bombs = []; explosions = []; items = [];
+    bombs = []; explosions = []; items = []; pendingItems = [];
     players = [
         new Player(1, 0, 0, '#3b82f6', '👦'),
         new Player(2, COLS-1, ROWS-1, '#ef4444', '👧')
