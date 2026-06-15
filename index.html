@@ -744,6 +744,7 @@ document.getElementById('btn-create').addEventListener('click', async () => {
     await initAudio();
     roomId = generateRoomCode();
     isHost = true;
+    gameState = 'WAITING';
     roomRef = doc(roomsCollection, roomId);
     
     initGameObjects();
@@ -784,6 +785,7 @@ document.getElementById('btn-join').addEventListener('click', async () => {
     
     if (snap.exists() && snap.data().status === 'WAITING') {
         isHost = false;
+        gameState = 'PLAYING';
         roomId = code;
         initGameObjects();
         await updateDoc(roomRef, { guest: userId, status: 'PLAYING' });
