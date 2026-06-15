@@ -1,0 +1,870 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Web 爆爆王 (連線對戰)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Fredoka+One&display=swap');
+        body {
+            font-family: 'Fredoka One', cursive, 'Inter', sans-serif;
+            background-color: #1e293b;
+            color: white;
+            user-select: none;
+            overflow: hidden;
+        }
+        #game-container {
+            position: relative;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            border-radius: 12px;
+            overflow: hidden;
+            border: 4px solid #3b82f6;
+        }
+        canvas {
+            display: block;
+            background-color: #4ade80;
+        }
+        #ui-layer {
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.95);
+            z-index: 50;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            backdrop-filter: blur(5px);
+        }
+        .stat-icon { font-family: 'Segoe UI Emoji', sans-serif; }
+    </style>
+</head>
+<body class="h-screen flex flex-col items-center justify-center">
+
+    <div class="mb-4 text-center z-10">
+        <h1 class="text-5xl font-bold text-blue-400 mb-2 drop-shadow-md">💦 Web 爆爆王 🎈</h1>
+        <p class="text-slate-300 text-sm">線上連線對戰！建立房間邀請朋友一起玩！</p>
+    </div>
+
+    <div class="flex gap-6 items-start z-10">
+        <!-- Player 1 Stats -->
+        <div id="p1-card" class="bg-slate-800 p-4 rounded-xl border-2 border-blue-500 w-48 shadow-lg transition-all">
+            <h2 class="text-xl text-blue-400 mb-2 border-b border-slate-700 pb-1">👦 房主 (藍寶)</h2>
+            <p class="text-xs text-slate-400 mb-2">移動: W A S D / 方向鍵<br>放水球: 空白鍵 / Enter</p>
+            <div class="flex justify-between items-center bg-slate-700 p-1 rounded mb-1">
+                <span class="stat-icon">🎈 水球</span> <span id="p1-bombs" class="font-bold">1</span>
+            </div>
+            <div class="flex justify-between items-center bg-slate-700 p-1 rounded mb-1">
+                <span class="stat-icon">💦 範圍</span> <span id="p1-power" class="font-bold">1</span>
+            </div>
+            <div class="flex justify-between items-center bg-slate-700 p-1 rounded">
+                <span class="stat-icon">⛸️ 速度</span> <span id="p1-speed" class="font-bold">1</span>
+            </div>
+        </div>
+
+        <div id="game-container">
+            <canvas id="gameCanvas" width="600" height="520"></canvas>
+        </div>
+
+        <!-- Player 2 Stats -->
+        <div id="p2-card" class="bg-slate-800 p-4 rounded-xl border-2 border-red-500 w-48 shadow-lg transition-all opacity-50">
+            <h2 class="text-xl text-red-400 mb-2 border-b border-slate-700 pb-1">👧 訪客 (囡囡)</h2>
+            <p class="text-xs text-slate-400 mb-2">移動: W A S D / 方向鍵<br>放水球: 空白鍵 / Enter</p>
+            <div class="flex justify-between items-center bg-slate-700 p-1 rounded mb-1">
+                <span class="stat-icon">🎈 水球</span> <span id="p2-bombs" class="font-bold">1</span>
+            </div>
+            <div class="flex justify-between items-center bg-slate-700 p-1 rounded mb-1">
+                <span class="stat-icon">💦 範圍</span> <span id="p2-power" class="font-bold">1</span>
+            </div>
+            <div class="flex justify-between items-center bg-slate-700 p-1 rounded">
+                <span class="stat-icon">⛸️ 速度</span> <span id="p2-speed" class="font-bold">1</span>
+            </div>
+        </div>
+    </div>
+
+    <div id="ui-layer">
+        <h1 class="text-6xl font-bold mb-8 text-white drop-shadow-[0_5px_5px_rgba(59,130,246,0.5)] text-center">💦 Web 爆爆王 🎈</h1>
+
+        <div id="screen-loading" class="text-2xl text-blue-300 animate-pulse flex flex-col items-center">
+            <div class="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+            連線至伺服器中...
+        </div>
+
+        <div id="screen-main" class="hidden flex flex-col gap-5 w-80">
+            <button id="btn-create" class="bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 px-8 rounded-full text-xl shadow-lg border-b-4 border-blue-800 transition transform hover:-translate-y-1">建立房間 (房主)</button>
+            <button id="btn-show-join" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-4 px-8 rounded-full text-xl shadow-lg border-b-4 border-emerald-800 transition transform hover:-translate-y-1">加入房間 (訪客)</button>
+        </div>
+
+        <div id="screen-join" class="hidden flex flex-col gap-4 items-center">
+            <h2 class="text-2xl text-emerald-300 mb-2">輸入房間代碼</h2>
+            <input type="text" id="join-code" maxlength="4" placeholder="例如: ABCD" class="text-center text-4xl p-3 rounded-xl text-slate-800 font-bold uppercase w-64 border-4 border-emerald-500 focus:outline-none focus:border-emerald-300 shadow-inner">
+            <div class="flex gap-4 mt-4 w-64">
+                <button id="btn-join" class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-full text-lg shadow border-b-4 border-emerald-800">加入</button>
+                <button id="btn-back-join" class="flex-1 bg-slate-600 hover:bg-slate-500 text-white font-bold py-3 rounded-full text-lg shadow border-b-4 border-slate-800">返回</button>
+            </div>
+            <p id="join-error" class="text-red-400 mt-2 hidden">找不到房間或房間已滿！</p>
+        </div>
+
+        <div id="screen-lobby" class="hidden flex flex-col gap-4 items-center">
+            <h2 class="text-2xl text-blue-300">請將代碼告訴朋友</h2>
+            <div id="display-room-code" class="text-7xl font-bold tracking-widest text-yellow-400 bg-slate-800 py-4 px-8 rounded-2xl border-4 border-yellow-500 shadow-[0_0_30px_rgba(234,179,8,0.3)] cursor-pointer hover:bg-slate-700 transition" title="點擊複製代碼">ABCD</div>
+            <p class="text-slate-400 text-sm mt-1 cursor-pointer" onclick="document.getElementById('display-room-code').click()">👆 點擊可複製</p>
+            <div class="flex items-center gap-3 mt-6">
+                <div class="w-6 h-6 border-4 border-blue-400 border-t-transparent rounded-full animate-spin"></div>
+                <p class="text-xl text-blue-200">等待對手加入中...</p>
+            </div>
+            <button id="btn-cancel-lobby" class="mt-6 bg-red-600 hover:bg-red-500 text-white font-bold py-2 px-8 rounded-full text-lg shadow border-b-4 border-red-800">取消建立</button>
+        </div>
+
+        <div id="screen-gameover" class="hidden flex flex-col gap-4 items-center">
+            <h2 id="gameover-title" class="text-7xl font-bold mb-8 drop-shadow-[0_5px_10px_rgba(0,0,0,0.8)] text-center">🏆 玩家 1 獲勝！</h2>
+            <button id="btn-back-main" class="bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 px-10 rounded-full text-2xl shadow-lg border-b-4 border-blue-800 transition transform hover:scale-105">回主選單</button>
+        </div>
+    </div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+import { getFirestore, doc, getDoc, setDoc, updateDoc, onSnapshot, collection, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+const appId = 'bubble-3495d';
+const firebaseConfig = {
+  apiKey: "AIzaSyCICqFwiwKMA4sHccARrSNAepbC4ZiZXGc",
+  authDomain: "bubble-3495d.firebaseapp.com",
+  projectId: "bubble-3495d",
+  storageBucket: "bubble-3495d.firebasestorage.app",
+  messagingSenderId: "847957069629",
+  appId: "1:847957069629:web:30852cc295827b265bbf54",
+  measurementId: "G-XFN6ZL8Y2Q"
+};
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const roomsCollection = collection(db, 'artifacts', appId, 'public', 'data', 'rooms');
+
+let userId = null;
+let isHost = false;
+let roomId = null;
+let roomRef = null;
+let unsubscribe = null;
+
+// Game State Sync Variables
+let p2BombReqCounter = 0;
+let lastP2BombReq = 0;
+let remoteTarget = { x: 0, y: 0 };
+let lastSyncTime = 0;
+
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const TILE_SIZE = 40;
+const ROWS = 13;
+const COLS = 15;
+
+const INITIAL_MAP = [
+    [0, 0, 2, 2, 1, 2, 2, 2, 1, 2, 2, 0, 0, 0, 0],
+    [0, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 0],
+    [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
+    [2, 1, 2, 1, 0, 1, 2, 1, 2, 1, 0, 1, 2, 1, 2],
+    [1, 2, 2, 2, 2, 2, 2, 0, 2, 2, 2, 2, 2, 2, 1],
+    [2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2],
+    [2, 2, 2, 0, 2, 2, 2, 2, 2, 2, 2, 0, 2, 2, 2],
+    [2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2],
+    [1, 2, 2, 2, 2, 2, 2, 0, 2, 2, 2, 2, 2, 2, 1],
+    [2, 1, 2, 1, 0, 1, 2, 1, 2, 1, 0, 1, 2, 1, 2],
+    [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
+    [0, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 0],
+    [0, 0, 0, 0, 1, 2, 2, 2, 1, 2, 2, 0, 0, 0, 0],
+];
+
+let gameState = 'MENU'; // MENU, WAITING, PLAYING, GAMEOVER
+let gameMap = [];
+let players = [];
+let bombs = [];
+let explosions = [];
+let items = [];
+let winnerId = null;
+let lastFrameTime = 0;
+
+let sfx = {};
+let audioInited = false;
+async function initAudio() {
+    if(audioInited) return;
+    await Tone.start();
+    sfx = {
+        place: new Tone.MembraneSynth({ pitchDecay: 0.05, octaves: 2 }).toDestination(),
+        explode: new Tone.NoiseSynth({ noise: { type: 'white' }, envelope: { attack: 0.01, decay: 0.3 } }).toDestination(),
+        item: new Tone.PolySynth(Tone.Synth, { oscillator: { type: 'sine' } }).toDestination(),
+        trap: new Tone.FMSynth({ modulationIndex: 10, envelope: { attack: 0.1, decay: 0.5 } }).toDestination(),
+        win: new Tone.PolySynth(Tone.Synth).toDestination()
+    };
+    sfx.place.volume.value = -10;
+    sfx.explode.volume.value = -15;
+    sfx.item.volume.value = -10;
+    sfx.trap.volume.value = -5;
+    audioInited = true;
+}
+
+function playSound(type) {
+    if(!sfx[type]) return;
+    try {
+        if(type === 'place') sfx.place.triggerAttackRelease("C3", "32n");
+        if(type === 'explode') sfx.explode.triggerAttackRelease("8n");
+        if(type === 'item') sfx.item.triggerAttackRelease(["C5", "E5"], "16n");
+        if(type === 'trap') sfx.trap.triggerAttackRelease("C2", "4n");
+        if(type === 'win') sfx.win.triggerAttackRelease(["C4", "E4", "G4", "C5"], "2n");
+    } catch(e) {}
+}
+
+const keys = {};
+window.addEventListener('keydown', e => {
+    keys[e.code] = true;
+    
+    // Bomb placement logic
+    if (gameState === 'PLAYING') {
+        const isActionKey = e.code === 'Space' || e.code === 'Enter';
+        const localPlayer = isHost ? players[0] : players[1];
+        
+        if (isActionKey && localPlayer.state === 'NORMAL') {
+            keys['Space'] = false; keys['Enter'] = false; // Prevent spam
+            if (isHost) {
+                localPlayer.placeBomb();
+            } else {
+                // Guest requests bomb placement from host
+                let localActiveBombs = bombs.filter(b => b.ownerId === 2).length;
+                if (localActiveBombs < localPlayer.maxBombs) {
+                    p2BombReqCounter++;
+                    updateDoc(roomRef, { p2BombReq: p2BombReqCounter });
+                }
+            }
+        }
+    }
+});
+window.addEventListener('keyup', e => { keys[e.code] = false; });
+
+class Player {
+    constructor(id, x, y, color, emoji) {
+        this.id = id;
+        this.x = x * TILE_SIZE;
+        this.y = y * TILE_SIZE;
+        this.width = TILE_SIZE * 0.7;
+        this.height = TILE_SIZE * 0.7;
+        this.color = color;
+        this.emoji = emoji;
+        
+        this.maxBombs = 1;
+        this.placedBombs = 0; // Local stat for Host
+        this.blastRadius = 1;
+        this.speedLevel = 1;
+        this.state = 'NORMAL'; 
+        this.trapTimer = 0;
+    }
+
+    get speed() {
+        if (this.state === 'TRAPPED') return 0.5;
+        return 2 + (this.speedLevel * 0.4);
+    }
+
+    updateLocalMovement(dt) {
+        if (this.state === 'DEAD') return;
+        if (this.state === 'TRAPPED' && isHost) {
+            // Host is authoritative over trap timer
+            this.trapTimer -= dt;
+            if (this.trapTimer <= 0) this.die();
+        }
+
+        let dx = 0; let dy = 0;
+        // Both players can use WASD or Arrows on their local machine
+        if (keys['KeyW'] || keys['ArrowUp']) dy = -this.speed;
+        if (keys['KeyS'] || keys['ArrowDown']) dy = this.speed;
+        if (keys['KeyA'] || keys['ArrowLeft']) dx = -this.speed;
+        if (keys['KeyD'] || keys['ArrowRight']) dx = this.speed;
+
+        if (dx !== 0 && dy !== 0) dy = 0; // Prioritize horizontal
+
+        if (dx !== 0 || dy !== 0) {
+            let newX = this.x + dx;
+            let newY = this.y + dy;
+            
+            newX = Math.max(0, Math.min(newX, COLS * TILE_SIZE - this.width));
+            newY = Math.max(0, Math.min(newY, ROWS * TILE_SIZE - this.height));
+
+            if (!this.checkCollision(newX, this.y)) this.x = newX;
+            if (!this.checkCollision(this.x, newY)) this.y = newY;
+        }
+    }
+
+    checkCollision(x, y) {
+        const margin = 2;
+        const leftCol = Math.floor((x + margin) / TILE_SIZE);
+        const rightCol = Math.floor((x + this.width - margin) / TILE_SIZE);
+        const topRow = Math.floor((y + margin) / TILE_SIZE);
+        const bottomRow = Math.floor((y + this.height - margin) / TILE_SIZE);
+
+        for (let r = topRow; r <= bottomRow; r++) {
+            for (let c = leftCol; c <= rightCol; c++) {
+                if (r >= 0 && r < ROWS && c >= 0 && c < COLS) {
+                    if (gameMap[r][c] === 1 || gameMap[r][c] === 2) return true;
+                    // Bomb solid collision
+                    for (let b of bombs) {
+                        if (b.col === c && b.row === r) {
+                            const pCenterX = this.x + this.width/2;
+                            const pCenterY = this.y + this.height/2;
+                            const bCenterX = b.col * TILE_SIZE + TILE_SIZE/2;
+                            const bCenterY = b.row * TILE_SIZE + TILE_SIZE/2;
+                            const dist = Math.hypot(pCenterX - bCenterX, pCenterY - bCenterY);
+                            if (dist > TILE_SIZE * 0.8) return true; 
+                        }
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    placeBomb(force = false) {
+        // Host manages bomb creation
+        if (!force && this.placedBombs >= this.maxBombs) return;
+        
+        const centerCol = Math.floor((this.x + this.width / 2) / TILE_SIZE);
+        const centerRow = Math.floor((this.y + this.height / 2) / TILE_SIZE);
+
+        if (bombs.some(b => b.col === centerCol && b.row === centerRow)) return;
+
+        bombs.push(new Bomb(centerCol, centerRow, this));
+        this.placedBombs++;
+        playSound('place');
+    }
+
+    trap() {
+        if (this.state === 'NORMAL') {
+            this.state = 'TRAPPED';
+            this.trapTimer = 5000;
+            playSound('trap');
+        }
+    }
+
+    die() {
+        this.state = 'DEAD';
+        if (isHost) triggerGameOver(this.id === 1 ? 2 : 1);
+    }
+
+    draw(ctx) {
+        if (this.state === 'DEAD') return;
+        
+        ctx.save();
+        ctx.translate(this.x + this.width/2, this.y + this.height/2);
+        
+        if (this.state === 'TRAPPED') {
+            ctx.beginPath();
+            ctx.arc(0, 0, this.width/2 + 5, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(173, 216, 230, 0.6)';
+            ctx.fill();
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+            ctx.stroke();
+            
+            const floatOffset = Math.sin(Date.now() / 200) * 3;
+            ctx.font = '24px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(this.emoji, 0, floatOffset);
+        } else {
+            ctx.font = '28px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            const scale = 1 + Math.sin(Date.now() / 300) * 0.05;
+            ctx.scale(scale, scale);
+            ctx.fillText(this.emoji, 0, 0);
+        }
+        ctx.restore();
+    }
+}
+
+class Bomb {
+    constructor(col, row, owner, fromNetwork = false) {
+        this.col = col;
+        this.row = row;
+        this.owner = owner;
+        this.ownerId = owner.id;
+        this.timer = 2500;
+        this.radius = owner.blastRadius;
+        this.creationTime = fromNetwork ? fromNetwork.creationTime : Date.now();
+    }
+
+    update(dt) {
+        this.timer -= dt;
+        if (this.timer <= 0 && isHost) {
+            this.explode();
+        }
+    }
+
+    explode() {
+        if (!isHost) return; // Only Host processes explosions
+        const idx = bombs.indexOf(this);
+        if (idx > -1) {
+            bombs.splice(idx, 1);
+            if(this.owner) this.owner.placedBombs--;
+            
+            playSound('explode');
+            explosions.push(new Explosion(this.col, this.row));
+
+            const dirs = [[0,-1], [0,1], [-1,0], [1,0]];
+            for (let [dx, dy] of dirs) {
+                for (let i = 1; i <= this.radius; i++) {
+                    const c = this.col + dx * i;
+                    const r = this.row + dy * i;
+                    
+                    if (c < 0 || c >= COLS || r < 0 || r >= ROWS) break;
+                    
+                    const cell = gameMap[r][c];
+                    if (cell === 1) break;
+                    
+                    if (cell === 2) {
+                        gameMap[r][c] = 0;
+                        explosions.push(new Explosion(c, r));
+                        if (Math.random() < 0.4) {
+                            const types = ['BOMB', 'POWER', 'SPEED'];
+                            const type = types[Math.floor(Math.random() * types.length)];
+                            items.push(new Item(c, r, type));
+                        }
+                        break; 
+                    }
+                    
+                    explosions.push(new Explosion(c, r));
+                    
+                    const hitBomb = bombs.find(b => b.col === c && b.row === r);
+                    if (hitBomb) hitBomb.timer = 0;
+                }
+            }
+        }
+    }
+
+    draw(ctx) {
+        ctx.save();
+        const x = this.col * TILE_SIZE + TILE_SIZE/2;
+        const y = this.row * TILE_SIZE + TILE_SIZE/2;
+        ctx.translate(x, y);
+        
+        const elapsed = Date.now() - this.creationTime;
+        const scale = 1 + Math.sin(elapsed / 100) * 0.1;
+        ctx.scale(scale, scale);
+        
+        ctx.font = '28px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('🎈', 0, 0);
+        ctx.restore();
+    }
+}
+
+class Explosion {
+    constructor(col, row) {
+        this.col = col;
+        this.row = row;
+        this.timer = 500;
+    }
+    update(dt) { this.timer -= dt; }
+    draw(ctx) {
+        const x = this.col * TILE_SIZE;
+        const y = this.row * TILE_SIZE;
+        const alpha = Math.max(0, this.timer / 500);
+        
+        ctx.fillStyle = `rgba(59, 130, 246, ${alpha})`;
+        ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
+        ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+        ctx.fillRect(x + 10, y + 10, TILE_SIZE - 20, TILE_SIZE - 20);
+        
+        ctx.globalAlpha = alpha;
+        ctx.font = '20px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('💦', x + TILE_SIZE/2, y + TILE_SIZE/2);
+        ctx.globalAlpha = 1;
+    }
+}
+
+class Item {
+    constructor(col, row, type, creationTime = Date.now()) {
+        this.col = col; this.row = row; this.type = type;
+        this.creationTime = creationTime;
+    }
+    draw(ctx) {
+        const x = this.col * TILE_SIZE + TILE_SIZE/2;
+        const y = this.row * TILE_SIZE + TILE_SIZE/2;
+        const yOffset = Math.sin((Date.now() - this.creationTime) / 200) * 3;
+        
+        let emoji = this.type === 'BOMB' ? '💧' : (this.type === 'POWER' ? '🧪' : '⛸️');
+        ctx.font = '24px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(emoji, x, y + yOffset);
+    }
+    collect(player) {
+        if (this.type === 'BOMB') player.maxBombs = Math.min(8, player.maxBombs + 1);
+        if (this.type === 'POWER') player.blastRadius = Math.min(8, player.blastRadius + 1);
+        if (this.type === 'SPEED') player.speedLevel = Math.min(6, player.speedLevel + 1);
+        playSound('item');
+    }
+}
+
+function serializeBomb(b) {
+    return { col: b.col, row: b.row, ownerId: b.ownerId, timer: b.timer, radius: b.radius, creationTime: b.creationTime };
+}
+function reconstructBomb(data) {
+    const owner = data.ownerId === 1 ? players[0] : players[1];
+    const b = new Bomb(data.col, data.row, owner, { creationTime: data.creationTime });
+    b.timer = data.timer; b.radius = data.radius;
+    return b;
+}
+function serializeItem(i) {
+    return { col: i.col, row: i.row, type: i.type, creationTime: i.creationTime };
+}
+function serializeExplosion(e) {
+    return { col: e.col, row: e.row, timer: e.timer };
+}
+function reconstructExplosion(data) {
+    const e = new Explosion(data.col, data.row);
+    e.timer = data.timer;
+    return e;
+}
+
+function checkInteractions() {
+    if (!isHost) return; // Only host calculates collisions
+
+    // Player vs Items
+    players.forEach(p => {
+        if(p.state !== 'NORMAL') return;
+        const px = p.x + p.width/2; const py = p.y + p.height/2;
+        
+        for (let i = items.length - 1; i >= 0; i--) {
+            const item = items[i];
+            const ix = item.col * TILE_SIZE + TILE_SIZE/2;
+            const iy = item.row * TILE_SIZE + TILE_SIZE/2;
+            
+            if (Math.hypot(px - ix, py - iy) < TILE_SIZE * 0.6) {
+                item.collect(p);
+                items.splice(i, 1);
+            }
+        }
+    });
+
+    // Explosions vs Players
+    explosions.forEach(e => {
+        const cx = e.col * TILE_SIZE + TILE_SIZE/2;
+        const cy = e.row * TILE_SIZE + TILE_SIZE/2;
+        players.forEach(p => {
+            if (p.state === 'DEAD') return;
+            const px = p.x + p.width/2; const py = p.y + p.height/2;
+            if (Math.hypot(cx - px, cy - py) < TILE_SIZE * 0.7) {
+                p.trap();
+            }
+        });
+    });
+
+    // Destroy items hit by explosion
+    explosions.forEach(e => {
+        items = items.filter(item => !(item.col === e.col && item.row === e.row));
+    });
+
+    // Player vs Player (Touching Trapped Player)
+    const p1 = players[0]; const p2 = players[1];
+    if (p1.state !== 'DEAD' && p2.state !== 'DEAD') {
+        const dist = Math.hypot((p1.x + p1.width/2) - (p2.x + p2.width/2), (p1.y + p1.height/2) - (p2.y + p2.height/2));
+        if (dist < TILE_SIZE * 0.8) {
+            if (p1.state === 'TRAPPED' && p2.state === 'NORMAL') p1.die();
+            else if (p2.state === 'TRAPPED' && p1.state === 'NORMAL') p2.die();
+        }
+    }
+}
+
+function updateUI() {
+    ['1', '2'].forEach((id, index) => {
+        if(players[index]) {
+            document.getElementById(`p${id}-bombs`).innerText = players[index].maxBombs;
+            document.getElementById(`p${id}-power`).innerText = players[index].blastRadius;
+            document.getElementById(`p${id}-speed`).innerText = players[index].speedLevel;
+        }
+    });
+}
+
+function drawMap() {
+    for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < COLS; c++) {
+            ctx.fillStyle = (r + c) % 2 === 0 ? '#86efac' : '#4ade80';
+            ctx.fillRect(c * TILE_SIZE, r * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+            
+            const cell = gameMap[r][c];
+            if (cell === 1) {
+                ctx.fillStyle = '#94a3b8';
+                ctx.fillRect(c * TILE_SIZE, r * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+                ctx.fillStyle = '#64748b';
+                ctx.fillRect(c * TILE_SIZE, r * TILE_SIZE + TILE_SIZE - 5, TILE_SIZE, 5);
+            } else if (cell === 2) {
+                ctx.fillStyle = '#d97706';
+                ctx.fillRect(c * TILE_SIZE + 2, r * TILE_SIZE + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                ctx.strokeStyle = '#b45309'; ctx.lineWidth = 2;
+                ctx.strokeRect(c * TILE_SIZE + 4, r * TILE_SIZE + 4, TILE_SIZE - 8, TILE_SIZE - 8);
+                ctx.beginPath();
+                ctx.moveTo(c * TILE_SIZE + 8, r * TILE_SIZE + 8);
+                ctx.lineTo(c * TILE_SIZE + TILE_SIZE - 8, r * TILE_SIZE + TILE_SIZE - 8);
+                ctx.moveTo(c * TILE_SIZE + TILE_SIZE - 8, r * TILE_SIZE + 8);
+                ctx.lineTo(c * TILE_SIZE + 8, r * TILE_SIZE + TILE_SIZE - 8);
+                ctx.stroke();
+            }
+        }
+    }
+}
+
+function update(dt) {
+    const localPlayer = isHost ? players[0] : players[1];
+    const remotePlayer = isHost ? players[1] : players[0];
+
+    // Local Movement
+    if (localPlayer.state !== 'DEAD') localPlayer.updateLocalMovement(dt);
+
+    // Remote Interpolation (Smooth network movement)
+    remotePlayer.x += (remoteTarget.x - remotePlayer.x) * 0.3;
+    remotePlayer.y += (remoteTarget.y - remotePlayer.y) * 0.3;
+
+    if (isHost) {
+        for (let i = bombs.length - 1; i >= 0; i--) {
+            bombs[i].update(dt);
+        }
+        for (let i = explosions.length - 1; i >= 0; i--) {
+            explosions[i].update(dt);
+            if (explosions[i].timer <= 0) explosions.splice(i, 1);
+        }
+        checkInteractions();
+
+        // Host Network Sync (~10 FPS)
+        lastSyncTime += dt;
+        if (lastSyncTime > 100) {
+            updateDoc(roomRef, {
+                'p1.x': players[0].x, 'p1.y': players[0].y, 'p1.state': players[0].state,
+                'p1.maxBombs': players[0].maxBombs, 'p1.blastRadius': players[0].blastRadius, 'p1.speedLevel': players[0].speedLevel,
+                'p2.state': players[1].state, // Host authoritative over states
+                'p2.maxBombs': players[1].maxBombs, 'p2.blastRadius': players[1].blastRadius, 'p2.speedLevel': players[1].speedLevel,
+                'map': JSON.stringify(gameMap),
+                'bombs': JSON.stringify(bombs.map(serializeBomb)),
+                'items': JSON.stringify(items.map(serializeItem)),
+                'explosions': JSON.stringify(explosions.map(serializeExplosion)),
+                'status': gameState
+            });
+            lastSyncTime = 0;
+        }
+    } else {
+        // Guest visual updates
+        bombs.forEach(b => b.update(dt));
+        explosions.forEach(e => { e.timer -= dt; });
+
+        // Guest Network Sync
+        lastSyncTime += dt;
+        if (lastSyncTime > 100) {
+            updateDoc(roomRef, {
+                'p2.x': localPlayer.x, 'p2.y': localPlayer.y
+            });
+            lastSyncTime = 0;
+        }
+    }
+    
+    updateUI();
+}
+
+function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    drawMap();
+    items.forEach(i => i.draw(ctx));
+    bombs.forEach(b => b.draw(ctx));
+    explosions.forEach(e => e.draw(ctx));
+    players.slice().sort((a,b) => a.y - b.y).forEach(p => p.draw(ctx));
+}
+
+function gameLoop(timestamp) {
+    if (gameState !== 'PLAYING') return;
+    const dt = timestamp - lastFrameTime;
+    lastFrameTime = timestamp;
+    update(dt);
+    draw();
+    requestAnimationFrame(gameLoop);
+}
+
+function showScreen(id) {
+    ['screen-loading', 'screen-main', 'screen-join', 'screen-lobby', 'screen-gameover'].forEach(s => {
+        document.getElementById(s).classList.add('hidden');
+    });
+    document.getElementById(id).classList.remove('hidden');
+}
+
+function generateRoomCode() {
+    return Math.random().toString(36).substring(2, 6).toUpperCase();
+}
+
+function initGameObjects() {
+    gameMap = INITIAL_MAP.map(row => [...row]);
+    bombs = []; explosions = []; items = [];
+    players = [
+        new Player(1, 0, 0, '#3b82f6', '👦'),
+        new Player(2, COLS-1, ROWS-1, '#ef4444', '👧')
+    ];
+    gameMap[0][0] = 0; gameMap[0][1] = 0; gameMap[1][0] = 0;
+    gameMap[ROWS-1][COLS-1] = 0; gameMap[ROWS-1][COLS-2] = 0; gameMap[ROWS-2][COLS-1] = 0;
+    drawMap();
+}
+
+function triggerGameOver(wId) {
+    gameState = 'GAMEOVER';
+    winnerId = wId;
+    playSound('win');
+    document.getElementById('ui-layer').style.display = 'flex';
+    showScreen('screen-gameover');
+    
+    const title = document.getElementById('gameover-title');
+    title.innerHTML = `🏆 玩家 ${winnerId} 獲勝！`;
+    title.className = `text-7xl font-bold mb-8 drop-shadow-lg text-center ${winnerId === 1 ? 'text-blue-400' : 'text-red-400'}`;
+
+    if (isHost && roomRef) {
+        updateDoc(roomRef, { status: 'GAMEOVER', winner: winnerId });
+    }
+}
+
+function startMatch() {
+    gameState = 'PLAYING';
+    document.getElementById('ui-layer').style.display = 'none';
+    
+    // Highlight local player card
+    document.getElementById('p1-card').classList.toggle('opacity-50', !isHost);
+    document.getElementById('p2-card').classList.toggle('opacity-50', isHost);
+
+    lastFrameTime = performance.now();
+    requestAnimationFrame(gameLoop);
+}
+
+document.getElementById('btn-create').addEventListener('click', async () => {
+    await initAudio();
+    roomId = generateRoomCode();
+    isHost = true;
+    roomRef = doc(roomsCollection, roomId);
+    
+    initGameObjects();
+
+    await setDoc(roomRef, {
+        host: userId, guest: null, status: 'WAITING',
+        map: JSON.stringify(gameMap), bombs: '[]', items: '[]', explosions: '[]',
+        p1: { x: players[0].x, y: players[0].y, state: 'NORMAL', maxBombs: 1, blastRadius: 1, speedLevel: 1 },
+        p2: { x: players[1].x, y: players[1].y, state: 'NORMAL', maxBombs: 1, blastRadius: 1, speedLevel: 1 },
+        p2BombReq: 0, winner: null
+    });
+
+    document.getElementById('display-room-code').innerText = roomId;
+    showScreen('screen-lobby');
+
+    unsubscribe = onSnapshot(roomRef, handleNetworkUpdate);
+});
+
+document.getElementById('btn-show-join').addEventListener('click', async () => {
+    await initAudio();
+    showScreen('screen-join');
+});
+
+document.getElementById('btn-back-join').addEventListener('click', () => { showScreen('screen-main'); });
+document.getElementById('btn-cancel-lobby').addEventListener('click', async () => {
+    if(unsubscribe) unsubscribe();
+    if(isHost && roomRef) await deleteDoc(roomRef);
+    showScreen('screen-main');
+});
+document.getElementById('btn-back-main').addEventListener('click', () => { showScreen('screen-main'); });
+
+document.getElementById('btn-join').addEventListener('click', async () => {
+    const code = document.getElementById('join-code').value.toUpperCase();
+    if(code.length !== 4) return;
+    
+    roomRef = doc(roomsCollection, code);
+    const snap = await getDoc(roomRef);
+    
+    if (snap.exists() && snap.data().status === 'WAITING') {
+        isHost = false;
+        roomId = code;
+        initGameObjects();
+        await updateDoc(roomRef, { guest: userId, status: 'PLAYING' });
+        document.getElementById('join-error').classList.add('hidden');
+        unsubscribe = onSnapshot(roomRef, handleNetworkUpdate);
+    } else {
+        document.getElementById('join-error').classList.remove('hidden');
+    }
+});
+
+// Copy Room Code to clipboard
+document.getElementById('display-room-code').addEventListener('click', () => {
+    const code = document.getElementById('display-room-code').innerText;
+    try {
+        const ta = document.createElement("textarea");
+        ta.value = code; document.body.appendChild(ta);
+        ta.select(); document.execCommand("Copy"); ta.remove();
+        alert("已複製代碼！");
+    } catch(e){}
+});
+
+function handleNetworkUpdate(docSnap) {
+    const data = docSnap.data();
+    if (!data) return;
+
+    // State Transitions
+    if (data.status === 'PLAYING' && gameState === 'WAITING') {
+        startMatch();
+    } else if (data.status === 'GAMEOVER' && gameState === 'PLAYING') {
+        triggerGameOver(data.winner);
+    }
+
+    if (gameState !== 'PLAYING') return;
+
+    if (isHost) {
+        // Host reads Guest position
+        remoteTarget.x = data.p2.x;
+        remoteTarget.y = data.p2.y;
+        
+        // Host processes Guest Bomb Requests
+        if (data.p2BombReq > lastP2BombReq) {
+            const diff = data.p2BombReq - lastP2BombReq;
+            for(let i=0; i<diff; i++) {
+                if(players[1].placedBombs < players[1].maxBombs) players[1].placeBomb(true);
+            }
+            lastP2BombReq = data.p2BombReq;
+        }
+    } else {
+        // Guest reads Host position
+        remoteTarget.x = data.p1.x;
+        remoteTarget.y = data.p1.y;
+
+        // Guest syncs Authoritative State from Host
+        players[0].state = data.p1.state;
+        players[1].state = data.p2.state;
+        
+        players[0].maxBombs = data.p1.maxBombs; players[0].blastRadius = data.p1.blastRadius; players[0].speedLevel = data.p1.speedLevel;
+        players[1].maxBombs = data.p2.maxBombs; players[1].blastRadius = data.p2.blastRadius; players[1].speedLevel = data.p2.speedLevel;
+
+        gameMap = JSON.parse(data.map);
+        bombs = JSON.parse(data.bombs).map(reconstructBomb);
+        items = JSON.parse(data.items).map(i => new Item(i.col, i.row, i.type, i.creationTime));
+        explosions = JSON.parse(data.explosions).map(reconstructExplosion);
+    }
+}
+
+window.onload = async () => {
+    try {
+        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+            await signInWithCustomToken(auth, __initial_auth_token);
+        } else {
+            await signInAnonymously(auth);
+        }
+        userId = auth.currentUser.uid;
+        showScreen('screen-main');
+    } catch (e) {
+        console.error("Auth Error", e);
+        document.getElementById('screen-loading').innerText = "連線失敗，請重新整理頁面。";
+    }
+};
+
+</script>
+</body>
+</html>
