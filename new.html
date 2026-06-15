@@ -1,1 +1,1726 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Web 爆爆王 (連線對戰)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Fredoka+One&display=swap');
+        body {
+            font-family: 'Fredoka One', cursive, 'Inter', sans-serif;
+            background-color: #1e293b;
+            color: white;
+            user-select: none;
+            overflow: hidden;
+        }
+        #game-container {
+            position: relative;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            border-radius: 12px;
+            overflow: hidden;
+            border: 4px solid #3b82f6;
+        }
+        canvas {
+            display: block;
+            background-color: #4ade80;
+        }
+        #ui-layer {
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.95);
+            z-index: 50;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            backdrop-filter: blur(5px);
+        }
+        .stat-icon { font-family: 'Segoe UI Emoji', sans-serif; }
+    </style>
+</head>
+<body class="h-screen flex flex-col items-center justify-center">
 
+    <div class="mb-4 text-center z-10">
+        <h1 class="text-5xl font-bold text-blue-400 mb-2 drop-shadow-md">💦 Web 爆爆王 🎈</h1>
+        <p class="text-slate-300 text-sm">線上連線對戰！建立房間邀請朋友一起玩，或挑戰 AI 玩家！</p>
+        <p id="room-info" class="text-yellow-300 text-sm mt-1 hidden">房號：</p>
+    </div>
+
+    <div class="flex gap-6 items-start z-10">
+        <!-- Player 1 Stats -->
+        <div id="p1-card" class="bg-slate-800 p-4 rounded-xl border-2 border-blue-500 w-48 shadow-lg transition-all">
+            <h2 class="text-xl text-blue-400 mb-2 border-b border-slate-700 pb-1">👦 房主 (藍寶)</h2>
+            <p class="text-xs text-slate-400 mb-2">移動: W A S D / 方向鍵<br>放水球: 空白鍵 / Enter</p>
+            <div class="flex justify-between items-center bg-slate-700 p-1 rounded mb-1">
+                <span class="stat-icon">🎈 水球</span> <span id="p1-bombs" class="font-bold">1</span>
+            </div>
+            <div class="flex justify-between items-center bg-slate-700 p-1 rounded mb-1">
+                <span class="stat-icon">💦 範圍</span> <span id="p1-power" class="font-bold">1</span>
+            </div>
+            <div class="flex justify-between items-center bg-slate-700 p-1 rounded">
+                <span class="stat-icon">⛸️ 速度</span> <span id="p1-speed" class="font-bold">1</span>
+            </div>
+        </div>
+
+        <div id="game-container">
+            <canvas id="gameCanvas" width="600" height="520"></canvas>
+        </div>
+
+        <!-- Player 2 Stats -->
+        <div id="p2-card" class="bg-slate-800 p-4 rounded-xl border-2 border-red-500 w-48 shadow-lg transition-all opacity-50">
+            <h2 class="text-xl text-red-400 mb-2 border-b border-slate-700 pb-1">👧 訪客 (囡囡)</h2>
+            <p class="text-xs text-slate-400 mb-2">移動: W A S D / 方向鍵<br>放水球: 空白鍵 / Enter</p>
+            <div class="flex justify-between items-center bg-slate-700 p-1 rounded mb-1">
+                <span class="stat-icon">🎈 水球</span> <span id="p2-bombs" class="font-bold">1</span>
+            </div>
+            <div class="flex justify-between items-center bg-slate-700 p-1 rounded mb-1">
+                <span class="stat-icon">💦 範圍</span> <span id="p2-power" class="font-bold">1</span>
+            </div>
+            <div class="flex justify-between items-center bg-slate-700 p-1 rounded">
+                <span class="stat-icon">⛸️ 速度</span> <span id="p2-speed" class="font-bold">1</span>
+            </div>
+        </div>
+    </div>
+
+    <div id="ui-layer">
+        <h1 class="text-6xl font-bold mb-8 text-white drop-shadow-[0_5px_5px_rgba(59,130,246,0.5)] text-center">💦 Web 爆爆王 🎈</h1>
+
+        <div id="screen-loading" class="text-2xl text-blue-300 animate-pulse flex flex-col items-center">
+            <div class="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+            連線至伺服器中...
+        </div>
+
+        <div id="screen-main" class="hidden flex flex-col gap-5 w-80">
+            <button id="btn-create" class="bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 px-8 rounded-full text-xl shadow-lg border-b-4 border-blue-800 transition transform hover:-translate-y-1">建立房間：雙人對戰</button>
+            <button id="btn-create-ai" class="bg-purple-600 hover:bg-purple-500 text-white font-bold py-4 px-8 rounded-full text-xl shadow-lg border-b-4 border-purple-800 transition transform hover:-translate-y-1">建立房間：對戰 AI</button>
+            <button id="btn-create-4p" class="bg-orange-600 hover:bg-orange-500 text-white font-bold py-4 px-8 rounded-full text-xl shadow-lg border-b-4 border-orange-800 transition transform hover:-translate-y-1">建立房間：4人 2對2</button>
+            <button id="btn-show-join" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-4 px-8 rounded-full text-xl shadow-lg border-b-4 border-emerald-800 transition transform hover:-translate-y-1">加入房間 / 觀戰</button>
+        </div>
+
+        <div id="screen-join" class="hidden flex flex-col gap-4 items-center">
+            <h2 class="text-2xl text-emerald-300 mb-2">輸入房間代碼</h2>
+            <input type="text" id="join-code" maxlength="4" placeholder="例如: ABCD" class="text-center text-4xl p-3 rounded-xl text-slate-800 font-bold uppercase w-64 border-4 border-emerald-500 focus:outline-none focus:border-emerald-300 shadow-inner">
+            <div class="flex gap-4 mt-4 w-64">
+                <button id="btn-join" class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-full text-lg shadow border-b-4 border-emerald-800">加入</button>
+                <button id="btn-back-join" class="flex-1 bg-slate-600 hover:bg-slate-500 text-white font-bold py-3 rounded-full text-lg shadow border-b-4 border-slate-800">返回</button>
+            </div>
+            <p id="join-error" class="text-red-400 mt-2 hidden">找不到房間或房間已滿！</p>
+        </div>
+
+        <div id="screen-lobby" class="hidden flex flex-col gap-4 items-center">
+            <h2 class="text-2xl text-blue-300">請將代碼告訴朋友</h2>
+            <div id="display-room-code" class="text-7xl font-bold tracking-widest text-yellow-400 bg-slate-800 py-4 px-8 rounded-2xl border-4 border-yellow-500 shadow-[0_0_30px_rgba(234,179,8,0.3)] cursor-pointer hover:bg-slate-700 transition" title="點擊複製代碼">ABCD</div>
+            <p class="text-slate-400 text-sm mt-1 cursor-pointer" onclick="document.getElementById('display-room-code').click()">👆 點擊可複製</p>
+            <div class="flex items-center gap-3 mt-6">
+                <div class="w-6 h-6 border-4 border-blue-400 border-t-transparent rounded-full animate-spin"></div>
+                <p class="text-xl text-blue-200">等待對手加入中...</p>
+            </div>
+            <button id="btn-cancel-lobby" class="mt-6 bg-red-600 hover:bg-red-500 text-white font-bold py-2 px-8 rounded-full text-lg shadow border-b-4 border-red-800">取消建立</button>
+        </div>
+
+        <div id="screen-gameover" class="hidden flex flex-col gap-4 items-center">
+            <h2 id="gameover-title" class="text-7xl font-bold mb-8 drop-shadow-[0_5px_10px_rgba(0,0,0,0.8)] text-center">🏆 玩家 1 獲勝！</h2>
+            <div class="flex gap-4">
+                <button id="btn-rematch" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-4 px-10 rounded-full text-2xl shadow-lg border-b-4 border-emerald-800 transition transform hover:scale-105">同房再來一場</button>
+                <button id="btn-back-main" class="bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 px-10 rounded-full text-2xl shadow-lg border-b-4 border-blue-800 transition transform hover:scale-105">回主選單</button>
+            </div>
+        </div>
+    </div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+import { getFirestore, doc, getDoc, setDoc, updateDoc, onSnapshot, collection, deleteDoc, arrayUnion } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+const appId = 'bubble-3495d';
+const firebaseConfig = {
+  apiKey: "AIzaSyCICqFwiwKMA4sHccARrSNAepbC4ZiZXGc",
+  authDomain: "bubble-3495d.firebaseapp.com",
+  projectId: "bubble-3495d",
+  storageBucket: "bubble-3495d.firebasestorage.app",
+  messagingSenderId: "847957069629",
+  appId: "1:847957069629:web:30852cc295827b265bbf54",
+  measurementId: "G-XFN6ZL8Y2Q"
+};
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const roomsCollection = collection(db, 'artifacts', appId, 'public', 'data', 'rooms');
+
+let userId = null;
+let isHost = false;
+let role = 'NONE'; // NONE, HOST, GUEST, P3, P4, SPECTATOR
+let gameMode = 'PVP'; // PVP, AI, PVP4
+let roomId = null;
+let roomRef = null;
+let unsubscribe = null;
+
+// Game State Sync Variables
+let p2BombReqCounter = 0;
+let lastP2BombReq = 0;
+let remoteTarget = { x: 0, y: 0 };
+let remoteTargets = {
+    1: { x: 0, y: 0 },
+    2: { x: 0, y: 0 },
+    3: { x: 0, y: 0 },
+    4: { x: 0, y: 0 }
+};
+let lastSyncTime = 0;
+let aiThinkTimer = 0;
+let aiBombCooldown = 0;
+let aiDir = { dx: 0, dy: 0 };
+let aiEscapeTarget = null;
+let aiEscapeTimer = 0;
+let aiEscapeExtraBombs = [];
+let localBombReqCounter = 0;
+let lastBombReqs = { 2: 0, 3: 0, 4: 0 };
+let teams = null;
+
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const TILE_SIZE = 40;
+const ROWS = 13;
+const COLS = 15;
+
+const INITIAL_MAP = [
+    [0, 0, 2, 2, 1, 2, 2, 2, 1, 2, 2, 0, 0, 0, 0],
+    [0, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 0],
+    [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
+    [2, 1, 2, 1, 0, 1, 2, 1, 2, 1, 0, 1, 2, 1, 2],
+    [1, 2, 2, 2, 2, 2, 2, 0, 2, 2, 2, 2, 2, 2, 1],
+    [2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2],
+    [2, 2, 2, 0, 2, 2, 2, 2, 2, 2, 2, 0, 2, 2, 2],
+    [2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2],
+    [1, 2, 2, 2, 2, 2, 2, 0, 2, 2, 2, 2, 2, 2, 1],
+    [2, 1, 2, 1, 0, 1, 2, 1, 2, 1, 0, 1, 2, 1, 2],
+    [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
+    [0, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 0],
+    [0, 0, 0, 0, 1, 2, 2, 2, 1, 2, 2, 0, 0, 0, 0],
+];
+
+const MAP_VARIANTS = [
+    INITIAL_MAP,
+    [
+        [0,0,0,0,1,2,2,2,1,0,0,0,0,0,0],
+        [0,1,2,1,2,1,2,1,2,1,2,1,2,1,0],
+        [0,2,2,2,2,2,0,2,0,2,2,2,2,2,0],
+        [0,1,2,1,0,1,2,1,2,1,0,1,2,1,0],
+        [1,2,0,2,2,2,2,0,2,2,2,2,0,2,1],
+        [2,1,2,1,2,1,2,1,2,1,2,1,2,1,2],
+        [2,2,0,2,2,0,2,2,2,0,2,2,0,2,2],
+        [2,1,2,1,2,1,2,1,2,1,2,1,2,1,2],
+        [1,2,0,2,2,2,2,0,2,2,2,2,0,2,1],
+        [0,1,2,1,0,1,2,1,2,1,0,1,2,1,0],
+        [0,2,2,2,2,2,0,2,0,2,2,2,2,2,0],
+        [0,1,2,1,2,1,2,1,2,1,2,1,2,1,0],
+        [0,0,0,0,1,2,2,2,1,0,0,0,0,0,0],
+    ],
+    [
+        [0,0,0,0,1,2,0,2,1,2,0,0,0,0,0],
+        [0,1,2,1,2,1,2,1,2,1,2,1,2,1,0],
+        [0,2,0,2,0,2,2,2,2,2,0,2,0,2,0],
+        [0,1,2,1,2,1,0,1,0,1,2,1,2,1,0],
+        [1,2,0,2,2,2,2,0,2,2,2,2,0,2,1],
+        [2,1,2,1,0,1,2,1,2,1,0,1,2,1,2],
+        [0,2,2,0,2,2,2,2,2,2,2,0,2,2,0],
+        [2,1,2,1,0,1,2,1,2,1,0,1,2,1,2],
+        [1,2,0,2,2,2,2,0,2,2,2,2,0,2,1],
+        [0,1,2,1,2,1,0,1,0,1,2,1,2,1,0],
+        [0,2,0,2,0,2,2,2,2,2,0,2,0,2,0],
+        [0,1,2,1,2,1,2,1,2,1,2,1,2,1,0],
+        [0,0,0,0,1,2,0,2,1,2,0,0,0,0,0],
+    ]
+];
+
+let currentMapIndex = 0;
+
+let gameState = 'MENU'; // MENU, WAITING, PLAYING, GAMEOVER
+let gameMap = [];
+let players = [];
+let bombs = [];
+let explosions = [];
+let items = [];
+let pendingItems = []; // 木箱被炸後，等爆炸效果結束再生成的道具
+let winnerId = null;
+let lastFrameTime = 0;
+
+let sfx = {};
+let audioInited = false;
+async function initAudio() {
+    if(audioInited) return;
+    await Tone.start();
+    sfx = {
+        place: new Tone.MembraneSynth({ pitchDecay: 0.05, octaves: 2 }).toDestination(),
+        explode: new Tone.NoiseSynth({ noise: { type: 'white' }, envelope: { attack: 0.01, decay: 0.3 } }).toDestination(),
+        item: new Tone.PolySynth(Tone.Synth, { oscillator: { type: 'sine' } }).toDestination(),
+        trap: new Tone.FMSynth({ modulationIndex: 10, envelope: { attack: 0.1, decay: 0.5 } }).toDestination(),
+        win: new Tone.PolySynth(Tone.Synth).toDestination()
+    };
+    sfx.place.volume.value = -10;
+    sfx.explode.volume.value = -15;
+    sfx.item.volume.value = -10;
+    sfx.trap.volume.value = -5;
+    audioInited = true;
+}
+
+function playSound(type) {
+    if(!sfx[type]) return;
+    try {
+        if(type === 'place') sfx.place.triggerAttackRelease("C3", "32n");
+        if(type === 'explode') sfx.explode.triggerAttackRelease("8n");
+        if(type === 'item') sfx.item.triggerAttackRelease(["C5", "E5"], "16n");
+        if(type === 'trap') sfx.trap.triggerAttackRelease("C2", "4n");
+        if(type === 'win') sfx.win.triggerAttackRelease(["C4", "E4", "G4", "C5"], "2n");
+    } catch(e) {}
+}
+
+const keys = {};
+window.addEventListener('keydown', e => {
+    keys[e.code] = true;
+    
+    // 觀戰者不能操作，只有 HOST / GUEST 可以放水球
+    if (gameState === 'PLAYING' && role !== 'SPECTATOR') {
+        const isActionKey = e.code === 'Space' || e.code === 'Enter';
+        const localIndex = getLocalPlayerIndex();
+        const localPlayer = localIndex >= 0 ? players[localIndex] : null;
+        
+        if (isActionKey && localPlayer && localPlayer.state === 'NORMAL') {
+            keys['Space'] = false; keys['Enter'] = false; // Prevent spam
+            if (role === 'HOST') {
+                localPlayer.placeBomb();
+            } else if (localIndex >= 1) {
+                const slot = localIndex + 1;
+                let localActiveBombs = bombs.filter(b => b.ownerId === slot).length;
+                if (localActiveBombs < localPlayer.maxBombs) {
+                    localBombReqCounter++;
+                    updateDoc(roomRef, { [`p${slot}BombReq`]: localBombReqCounter });
+                }
+            }
+        }
+    }
+});
+window.addEventListener('keyup', e => { keys[e.code] = false; });
+
+class Player {
+    constructor(id, x, y, color, emoji) {
+        this.id = id;
+        this.x = x * TILE_SIZE;
+        this.y = y * TILE_SIZE;
+        this.width = TILE_SIZE * 0.7;
+        this.height = TILE_SIZE * 0.7;
+        this.color = color;
+        this.emoji = emoji;
+        
+        this.maxBombs = 1;
+        this.placedBombs = 0; // Local stat for Host
+        this.blastRadius = 1;
+        this.speedLevel = 1;
+        this.state = 'NORMAL'; 
+        this.trapTimer = 0;
+        this.hasShield = false;
+        this.shieldGraceUntil = 0;
+    }
+
+    get speed() {
+        if (this.state === 'TRAPPED') return 0.5;
+        return 2 + (this.speedLevel * 0.4);
+    }
+
+    updateLocalMovement(dt) {
+        if (this.state === 'DEAD') return;
+        if (this.state === 'TRAPPED' && isHost) {
+            // Host is authoritative over trap timer
+            this.trapTimer -= dt;
+            if (this.trapTimer <= 0) this.die();
+        }
+
+        let dx = 0; let dy = 0;
+        // Both players can use WASD or Arrows on their local machine
+        if (keys['KeyW'] || keys['ArrowUp']) dy = -this.speed;
+        if (keys['KeyS'] || keys['ArrowDown']) dy = this.speed;
+        if (keys['KeyA'] || keys['ArrowLeft']) dx = -this.speed;
+        if (keys['KeyD'] || keys['ArrowRight']) dx = this.speed;
+
+        if (dx !== 0 && dy !== 0) dy = 0; // Prioritize horizontal
+
+        if (dx !== 0 || dy !== 0) {
+            let newX = this.x + dx;
+            let newY = this.y + dy;
+            
+            newX = Math.max(0, Math.min(newX, COLS * TILE_SIZE - this.width));
+            newY = Math.max(0, Math.min(newY, ROWS * TILE_SIZE - this.height));
+
+            if (!this.checkCollision(newX, this.y)) this.x = newX;
+            if (!this.checkCollision(this.x, newY)) this.y = newY;
+        }
+    }
+
+    checkCollision(x, y) {
+        const margin = 2;
+        const leftCol = Math.floor((x + margin) / TILE_SIZE);
+        const rightCol = Math.floor((x + this.width - margin) / TILE_SIZE);
+        const topRow = Math.floor((y + margin) / TILE_SIZE);
+        const bottomRow = Math.floor((y + this.height - margin) / TILE_SIZE);
+
+        for (let r = topRow; r <= bottomRow; r++) {
+            for (let c = leftCol; c <= rightCol; c++) {
+                if (r >= 0 && r < ROWS && c >= 0 && c < COLS) {
+                    if (gameMap[r][c] === 1 || gameMap[r][c] === 2) return true;
+                    // Bomb solid collision
+                    for (let b of bombs) {
+                        if (b.col === c && b.row === r) {
+                            const pCenterX = this.x + this.width/2;
+                            const pCenterY = this.y + this.height/2;
+                            const bCenterX = b.col * TILE_SIZE + TILE_SIZE/2;
+                            const bCenterY = b.row * TILE_SIZE + TILE_SIZE/2;
+                            const dist = Math.hypot(pCenterX - bCenterX, pCenterY - bCenterY);
+                            if (dist > TILE_SIZE * 0.8) return true; 
+                        }
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    placeBomb(force = false) {
+        // Host manages bomb creation
+        if (!force && this.placedBombs >= this.maxBombs) return;
+        
+        const centerCol = Math.floor((this.x + this.width / 2) / TILE_SIZE);
+        const centerRow = Math.floor((this.y + this.height / 2) / TILE_SIZE);
+
+        if (bombs.some(b => b.col === centerCol && b.row === centerRow)) return;
+
+        bombs.push(new Bomb(centerCol, centerRow, this));
+        this.placedBombs++;
+        playSound('place');
+    }
+
+    trap() {
+        if (this.state === 'NORMAL') {
+            this.state = 'TRAPPED';
+            this.trapTimer = 5000;
+            playSound('trap');
+        }
+    }
+
+    die() {
+        this.state = 'DEAD';
+        if (isHost) {
+            if (gameMode === 'PVP4') checkTeamVictory();
+            else triggerGameOver(this.id === 1 ? 2 : 1);
+        }
+    }
+
+    draw(ctx) {
+        if (this.state === 'DEAD') return;
+        
+        ctx.save();
+        ctx.translate(this.x + this.width/2, this.y + this.height/2);
+
+        if (this.hasShield) {
+            ctx.beginPath();
+            ctx.arc(0, 0, this.width/2 + 7, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(250, 204, 21, 0.22)';
+            ctx.fill();
+            ctx.lineWidth = 3;
+            ctx.strokeStyle = 'rgba(250, 204, 21, 0.9)';
+            ctx.stroke();
+        }
+        
+        if (this.state === 'TRAPPED') {
+            ctx.beginPath();
+            ctx.arc(0, 0, this.width/2 + 5, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(173, 216, 230, 0.6)';
+            ctx.fill();
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+            ctx.stroke();
+            
+            const floatOffset = Math.sin(Date.now() / 200) * 3;
+            ctx.font = '24px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(this.emoji, 0, floatOffset);
+        } else {
+            ctx.font = '28px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            const scale = 1 + Math.sin(Date.now() / 300) * 0.05;
+            ctx.scale(scale, scale);
+            ctx.fillText(this.emoji, 0, 0);
+        }
+        ctx.restore();
+    }
+}
+
+class Bomb {
+    constructor(col, row, owner, fromNetwork = false) {
+        this.col = col;
+        this.row = row;
+        this.owner = owner;
+        this.ownerId = owner.id;
+        this.timer = 2500;
+        this.radius = owner.blastRadius;
+        this.creationTime = fromNetwork ? fromNetwork.creationTime : Date.now();
+    }
+
+    update(dt) {
+        this.timer -= dt;
+        if (this.timer <= 0 && isHost) {
+            this.explode();
+        }
+    }
+
+    explode() {
+        if (!isHost) return; // Only Host processes explosions
+        const idx = bombs.indexOf(this);
+        if (idx > -1) {
+            bombs.splice(idx, 1);
+            if(this.owner) this.owner.placedBombs--;
+            
+            playSound('explode');
+            explosions.push(new Explosion(this.col, this.row));
+
+            const dirs = [[0,-1], [0,1], [-1,0], [1,0]];
+            for (let [dx, dy] of dirs) {
+                for (let i = 1; i <= this.radius; i++) {
+                    const c = this.col + dx * i;
+                    const r = this.row + dy * i;
+                    
+                    if (c < 0 || c >= COLS || r < 0 || r >= ROWS) break;
+                    
+                    const cell = gameMap[r][c];
+                    if (cell === 1) break;
+                    
+                    if (cell === 2) {
+                        gameMap[r][c] = 0;
+                        explosions.push(new Explosion(c, r));
+
+                        // 木箱被炸掉時先不要立刻生成道具，
+                        // 否則會被同一波爆炸馬上刪掉。
+                        const types = ['BOMB', 'POWER', 'SPEED', 'SHIELD'];
+                        const type = types[Math.floor(Math.random() * types.length)];
+                        pendingItems.push({
+                            col: c,
+                            row: r,
+                            type: type,
+                            spawnTime: Date.now() + 550
+                        });
+
+                        break; 
+                    }
+                    
+                    explosions.push(new Explosion(c, r));
+                    
+                    const hitBomb = bombs.find(b => b.col === c && b.row === r);
+                    if (hitBomb) hitBomb.timer = 0;
+                }
+            }
+        }
+    }
+
+    draw(ctx) {
+        ctx.save();
+        const x = this.col * TILE_SIZE + TILE_SIZE/2;
+        const y = this.row * TILE_SIZE + TILE_SIZE/2;
+        ctx.translate(x, y);
+        
+        const elapsed = Date.now() - this.creationTime;
+        const scale = 1 + Math.sin(elapsed / 100) * 0.1;
+        ctx.scale(scale, scale);
+        
+        ctx.font = '28px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('🎈', 0, 0);
+        ctx.restore();
+    }
+}
+
+class Explosion {
+    constructor(col, row) {
+        this.col = col;
+        this.row = row;
+        this.timer = 500;
+    }
+    update(dt) { this.timer -= dt; }
+    draw(ctx) {
+        const x = this.col * TILE_SIZE;
+        const y = this.row * TILE_SIZE;
+        const alpha = Math.max(0, this.timer / 500);
+        
+        ctx.fillStyle = `rgba(59, 130, 246, ${alpha})`;
+        ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
+        ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+        ctx.fillRect(x + 10, y + 10, TILE_SIZE - 20, TILE_SIZE - 20);
+        
+        ctx.globalAlpha = alpha;
+        ctx.font = '20px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('💦', x + TILE_SIZE/2, y + TILE_SIZE/2);
+        ctx.globalAlpha = 1;
+    }
+}
+
+class Item {
+    constructor(col, row, type, creationTime = Date.now()) {
+        this.col = col; this.row = row; this.type = type;
+        this.creationTime = creationTime;
+    }
+    draw(ctx) {
+        const x = this.col * TILE_SIZE + TILE_SIZE/2;
+        const y = this.row * TILE_SIZE + TILE_SIZE/2;
+        const yOffset = Math.sin((Date.now() - this.creationTime) / 200) * 3;
+        
+        let emoji = this.type === 'BOMB' ? '💧' : (this.type === 'POWER' ? '🧪' : (this.type === 'SPEED' ? '⛸️' : '🛡️'));
+        ctx.font = '24px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(emoji, x, y + yOffset);
+    }
+    collect(player) {
+        if (this.type === 'BOMB') player.maxBombs = Math.min(8, player.maxBombs + 1);
+        if (this.type === 'POWER') player.blastRadius = Math.min(8, player.blastRadius + 1);
+        if (this.type === 'SPEED') player.speedLevel = Math.min(6, player.speedLevel + 1);
+        if (this.type === 'SHIELD') player.hasShield = true;
+        playSound('item');
+    }
+}
+
+function serializeBomb(b) {
+    return { col: b.col, row: b.row, ownerId: b.ownerId, timer: b.timer, radius: b.radius, creationTime: b.creationTime };
+}
+function reconstructBomb(data) {
+    const owner = data.ownerId === 1 ? players[0] : players[1];
+    const b = new Bomb(data.col, data.row, owner, { creationTime: data.creationTime });
+    b.timer = data.timer; b.radius = data.radius;
+    return b;
+}
+function serializeItem(i) {
+    return { col: i.col, row: i.row, type: i.type, creationTime: i.creationTime };
+}
+function serializeExplosion(e) {
+    return { col: e.col, row: e.row, timer: e.timer };
+}
+function reconstructExplosion(data) {
+    const e = new Explosion(data.col, data.row);
+    e.timer = data.timer;
+    return e;
+}
+
+function serializePlayer(p) {
+    return {
+        x: p.x,
+        y: p.y,
+        state: p.state,
+        maxBombs: p.maxBombs,
+        blastRadius: p.blastRadius,
+        speedLevel: p.speedLevel,
+        hasShield: !!p.hasShield
+    };
+}
+
+function applyPlayerData(p, data, includePosition = false) {
+    if (!p || !data) return;
+    if (includePosition) {
+        p.x = data.x ?? p.x;
+        p.y = data.y ?? p.y;
+    }
+    p.state = data.state ?? p.state;
+    p.maxBombs = data.maxBombs ?? p.maxBombs;
+    p.blastRadius = data.blastRadius ?? p.blastRadius;
+    p.speedLevel = data.speedLevel ?? p.speedLevel;
+    p.hasShield = data.hasShield ?? p.hasShield;
+}
+
+function getLocalPlayerIndex() {
+    if (role === 'HOST') return 0;
+    if (role === 'GUEST') return 1;
+    if (role === 'P3') return 2;
+    if (role === 'P4') return 3;
+    return -1;
+}
+
+function playerRoleFromSlot(slot) {
+    if (slot === 1) return 'HOST';
+    if (slot === 2) return 'GUEST';
+    if (slot === 3) return 'P3';
+    if (slot === 4) return 'P4';
+    return 'SPECTATOR';
+}
+
+function processPendingItems() {
+    if (!isHost) return;
+
+    const now = Date.now();
+    for (let i = pendingItems.length - 1; i >= 0; i--) {
+        const pending = pendingItems[i];
+
+        if (now < pending.spawnTime) continue;
+
+        // 如果同一格還有爆炸，就再等一下，
+        // 讓道具不會從水柱裡冒出來。
+        const stillExploding = explosions.some(e => e.col === pending.col && e.row === pending.row);
+        if (stillExploding) {
+            pending.spawnTime = now + 100;
+            continue;
+        }
+
+        // 避免同一格重複生成道具。
+        const alreadyHasItem = items.some(item => item.col === pending.col && item.row === pending.row);
+        if (!alreadyHasItem) {
+            items.push(new Item(pending.col, pending.row, pending.type));
+        }
+
+        pendingItems.splice(i, 1);
+    }
+}
+
+function checkInteractions() {
+    if (!isHost) return; // Only host calculates collisions
+
+    // Player vs Items
+    players.forEach(p => {
+        if(p.state !== 'NORMAL') return;
+        const px = p.x + p.width/2; const py = p.y + p.height/2;
+        
+        for (let i = items.length - 1; i >= 0; i--) {
+            const item = items[i];
+            const ix = item.col * TILE_SIZE + TILE_SIZE/2;
+            const iy = item.row * TILE_SIZE + TILE_SIZE/2;
+            
+            if (Math.hypot(px - ix, py - iy) < TILE_SIZE * 0.6) {
+                item.collect(p);
+                items.splice(i, 1);
+            }
+        }
+    });
+
+    // Explosions vs Players
+    explosions.forEach(e => {
+        const cx = e.col * TILE_SIZE + TILE_SIZE/2;
+        const cy = e.row * TILE_SIZE + TILE_SIZE/2;
+        players.forEach(p => {
+            if (p.state === 'DEAD') return;
+            const px = p.x + p.width/2; const py = p.y + p.height/2;
+            if (Math.hypot(cx - px, cy - py) < TILE_SIZE * 0.7) {
+                // 護盾被打破後給短暫無敵，避免同一波水柱連續判定，下一幀又把玩家困住。
+                if (Date.now() < (p.shieldGraceUntil || 0)) return;
+
+                if (p.hasShield) {
+                    p.hasShield = false;
+                    p.shieldGraceUntil = Date.now() + 650;
+                    playSound('item');
+                } else {
+                    p.trap();
+                }
+            }
+        });
+    });
+
+    // Destroy items hit by explosion
+    explosions.forEach(e => {
+        items = items.filter(item => !(item.col === e.col && item.row === e.row));
+    });
+
+    // Player vs Player (Touching Trapped Player)
+    const p1 = players[0]; const p2 = players[1];
+    if (p1.state !== 'DEAD' && p2.state !== 'DEAD') {
+        const dist = Math.hypot((p1.x + p1.width/2) - (p2.x + p2.width/2), (p1.y + p1.height/2) - (p2.y + p2.height/2));
+        if (dist < TILE_SIZE * 0.8) {
+            if (p1.state === 'TRAPPED' && p2.state === 'NORMAL') p1.die();
+            else if (p2.state === 'TRAPPED' && p1.state === 'NORMAL') p2.die();
+        }
+    }
+}
+
+function checkTeamVictory() {
+    if (!isHost || gameMode !== 'PVP4' || !teams || !players.length) return;
+    const aliveTeams = new Set();
+    players.forEach(p => {
+        if (p && p.state !== 'DEAD') aliveTeams.add(teams[p.id]);
+    });
+    if (aliveTeams.size <= 1) {
+        const winnerTeam = Array.from(aliveTeams)[0] || '無人';
+        triggerGameOver(`隊伍 ${winnerTeam}`);
+    }
+}
+
+function updateUI() {
+    ['1', '2'].forEach((id, index) => {
+        if(players[index]) {
+            document.getElementById(`p${id}-bombs`).innerText = players[index].maxBombs;
+            document.getElementById(`p${id}-power`).innerText = players[index].blastRadius;
+            document.getElementById(`p${id}-speed`).innerText = players[index].speedLevel;
+        }
+    });
+}
+
+function drawMap() {
+    for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < COLS; c++) {
+            ctx.fillStyle = (r + c) % 2 === 0 ? '#86efac' : '#4ade80';
+            ctx.fillRect(c * TILE_SIZE, r * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+            
+            const cell = gameMap[r][c];
+            if (cell === 1) {
+                ctx.fillStyle = '#94a3b8';
+                ctx.fillRect(c * TILE_SIZE, r * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+                ctx.fillStyle = '#64748b';
+                ctx.fillRect(c * TILE_SIZE, r * TILE_SIZE + TILE_SIZE - 5, TILE_SIZE, 5);
+            } else if (cell === 2) {
+                ctx.fillStyle = '#d97706';
+                ctx.fillRect(c * TILE_SIZE + 2, r * TILE_SIZE + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                ctx.strokeStyle = '#b45309'; ctx.lineWidth = 2;
+                ctx.strokeRect(c * TILE_SIZE + 4, r * TILE_SIZE + 4, TILE_SIZE - 8, TILE_SIZE - 8);
+                ctx.beginPath();
+                ctx.moveTo(c * TILE_SIZE + 8, r * TILE_SIZE + 8);
+                ctx.lineTo(c * TILE_SIZE + TILE_SIZE - 8, r * TILE_SIZE + TILE_SIZE - 8);
+                ctx.moveTo(c * TILE_SIZE + TILE_SIZE - 8, r * TILE_SIZE + 8);
+                ctx.lineTo(c * TILE_SIZE + 8, r * TILE_SIZE + TILE_SIZE - 8);
+                ctx.stroke();
+            }
+        }
+    }
+}
+
+
+function setRoomInfo(text) {
+    const el = document.getElementById('room-info');
+    el.innerText = text;
+    el.classList.remove('hidden');
+}
+
+function getPlayerTile(player) {
+    return {
+        col: Math.floor((player.x + player.width / 2) / TILE_SIZE),
+        row: Math.floor((player.y + player.height / 2) / TILE_SIZE)
+    };
+}
+
+function inBounds(col, row) {
+    return col >= 0 && col < COLS && row >= 0 && row < ROWS;
+}
+
+function isWallOrBox(col, row) {
+    if (!inBounds(col, row)) return true;
+    return gameMap[row][col] === 1 || gameMap[row][col] === 2;
+}
+
+function hasBombAt(col, row, extraBombs = []) {
+    return bombs.concat(extraBombs).some(b => b.col === col && b.row === row);
+}
+
+function isWalkableTile(col, row, extraBombs = [], allowStart = null) {
+    if (!inBounds(col, row)) return false;
+    if (gameMap[row][col] === 1 || gameMap[row][col] === 2) return false;
+    if (allowStart && allowStart.col === col && allowStart.row === row) return true;
+    return !hasBombAt(col, row, extraBombs);
+}
+
+function blastCanReach(bomb, targetCol, targetRow) {
+    if (bomb.col === targetCol && bomb.row === targetRow) return true;
+
+    if (bomb.row === targetRow) {
+        const dist = Math.abs(bomb.col - targetCol);
+        if (dist > bomb.radius) return false;
+        const step = targetCol > bomb.col ? 1 : -1;
+        for (let c = bomb.col + step; c !== targetCol + step; c += step) {
+            if (gameMap[targetRow][c] === 1) return false;
+            if (gameMap[targetRow][c] === 2) return c === targetCol;
+        }
+        return true;
+    }
+
+    if (bomb.col === targetCol) {
+        const dist = Math.abs(bomb.row - targetRow);
+        if (dist > bomb.radius) return false;
+        const step = targetRow > bomb.row ? 1 : -1;
+        for (let r = bomb.row + step; r !== targetRow + step; r += step) {
+            if (gameMap[r][targetCol] === 1) return false;
+            if (gameMap[r][targetCol] === 2) return r === targetRow;
+        }
+        return true;
+    }
+
+    return false;
+}
+
+function isDangerTile(col, row, extraBombs = []) {
+    if (explosions.some(e => e.col === col && e.row === row)) return true;
+    return bombs.concat(extraBombs).some(b => blastCanReach(b, col, row));
+}
+
+function tileHasBreakableBoxAround(player) {
+    const { col, row } = getPlayerTile(player);
+    return getAdjacentBreakableBoxes(col, row).length > 0;
+}
+
+function getAdjacentBreakableBoxes(col, row) {
+    const dirs = [[0,-1], [0,1], [-1,0], [1,0]];
+    const result = [];
+    for (const [dx, dy] of dirs) {
+        const c = col + dx;
+        const r = row + dy;
+        if (inBounds(c, r) && gameMap[r][c] === 2) result.push({ col: c, row: r });
+    }
+    return result;
+}
+
+function canBombHitPlayer(ai) {
+    const aiTile = getPlayerTile(ai);
+    const target = getPlayerTile(players[0]);
+    const virtualBomb = {
+        col: aiTile.col,
+        row: aiTile.row,
+        radius: ai.blastRadius,
+        ownerId: ai.id,
+        timer: 2500
+    };
+    return blastCanReach(virtualBomb, target.col, target.row);
+}
+
+function isImmediateDangerTile(col, row) {
+    return explosions.some(e => e.col === col && e.row === row);
+}
+
+function orderedDirsToward(fromCol, fromRow, targetCol, targetRow) {
+    const dirs = [
+        { dx: 0, dy: -1 },
+        { dx: 0, dy: 1 },
+        { dx: -1, dy: 0 },
+        { dx: 1, dy: 0 }
+    ];
+    return dirs.sort((a, b) => {
+        const da = Math.abs(targetCol - (fromCol + a.dx)) + Math.abs(targetRow - (fromRow + a.dy));
+        const db = Math.abs(targetCol - (fromCol + b.dx)) + Math.abs(targetRow - (fromRow + b.dy));
+        return da - db;
+    });
+}
+
+function findPathDirection(ai, targetCol, targetRow, extraBombs = [], allowFutureDangerPath = true) {
+    const start = getPlayerTile(ai);
+    if (start.col === targetCol && start.row === targetRow) return { dx: 0, dy: 0 };
+
+    const queue = [{ col: start.col, row: start.row, first: null }];
+    const visited = new Set([`${start.col},${start.row}`]);
+
+    while (queue.length) {
+        const cur = queue.shift();
+        const dirs = orderedDirsToward(cur.col, cur.row, targetCol, targetRow);
+
+        for (const d of dirs) {
+            const nc = cur.col + d.dx;
+            const nr = cur.row + d.dy;
+            const key = `${nc},${nr}`;
+            if (visited.has(key)) continue;
+            if (!isWalkableTile(nc, nr, extraBombs, start)) continue;
+            if (isImmediateDangerTile(nc, nr)) continue;
+
+            // 追擊或吃道具時不要走進炸彈將來會炸到的格子；
+            // 逃離自己剛放的炸彈時，允許「快速穿過」未來會爆的格子，否則 AI 會卡在原地。
+            if (!allowFutureDangerPath && isDangerTile(nc, nr, extraBombs)) continue;
+
+            const first = cur.first || d;
+            if (nc === targetCol && nr === targetRow) return first;
+
+            visited.add(key);
+            queue.push({ col: nc, row: nr, first });
+        }
+    }
+
+    return null;
+}
+
+function findSafeEscapeTarget(ai, extraBombs = []) {
+    const start = getPlayerTile(ai);
+    const allBombs = bombs.concat(extraBombs);
+    const playerTile = getPlayerTile(players[0]);
+    const dirs = [
+        { dx: 0, dy: -1 },
+        { dx: 0, dy: 1 },
+        { dx: -1, dy: 0 },
+        { dx: 1, dy: 0 }
+    ];
+
+    const queue = [{ col: start.col, row: start.row, depth: 0 }];
+    const visited = new Set([`${start.col},${start.row}`]);
+    let best = null;
+    let bestScore = -Infinity;
+
+    while (queue.length) {
+        const cur = queue.shift();
+        const safe = !isDangerTile(cur.col, cur.row, extraBombs);
+
+        if (cur.depth >= 2 && safe) {
+            let minBombDist = 99;
+            for (const b of allBombs) {
+                const d = Math.abs(b.col - cur.col) + Math.abs(b.row - cur.row);
+                minBombDist = Math.min(minBombDist, d);
+            }
+            const distToPlayer = Math.abs(playerTile.col - cur.col) + Math.abs(playerTile.row - cur.row);
+            const score = minBombDist * 12 - cur.depth * 2 - distToPlayer * 0.5;
+            if (score > bestScore) {
+                bestScore = score;
+                best = { col: cur.col, row: cur.row, depth: cur.depth };
+            }
+        }
+
+        if (cur.depth >= 9) continue;
+
+        for (const d of dirs) {
+            const nc = cur.col + d.dx;
+            const nr = cur.row + d.dy;
+            const key = `${nc},${nr}`;
+            if (visited.has(key)) continue;
+            if (!isWalkableTile(nc, nr, extraBombs, start)) continue;
+            if (isImmediateDangerTile(nc, nr)) continue;
+
+            // 這裡故意允許通過「未來炸彈範圍」，因為 AI 剛放炸彈時必須先穿過爆炸線逃出去。
+            visited.add(key);
+            queue.push({ col: nc, row: nr, depth: cur.depth + 1 });
+        }
+    }
+
+    return best;
+}
+
+function findSafeMove(ai, extraBombs = []) {
+    const target = findSafeEscapeTarget(ai, extraBombs);
+    if (!target) return null;
+    return findPathDirection(ai, target.col, target.row, extraBombs, true);
+}
+
+function getEscapePlanAfterPlacingBomb(ai) {
+    const t = getPlayerTile(ai);
+    const virtualBomb = {
+        col: t.col,
+        row: t.row,
+        radius: ai.blastRadius,
+        ownerId: ai.id,
+        timer: 2500
+    };
+    const target = findSafeEscapeTarget(ai, [virtualBomb]);
+    if (!target) return null;
+
+    const firstStep = findPathDirection(ai, target.col, target.row, [virtualBomb], true);
+    if (!firstStep || (firstStep.dx === 0 && firstStep.dy === 0)) return null;
+
+    return { virtualBomb, target, firstStep };
+}
+
+function chooseDirectionToNearestItem(ai) {
+    if (!items.length) return null;
+    const aiTile = getPlayerTile(ai);
+    let best = null;
+    let bestDist = Infinity;
+
+    for (const item of items) {
+        if (isDangerTile(item.col, item.row)) continue;
+        const pathDir = findPathDirection(ai, item.col, item.row, [], false);
+        if (!pathDir) continue;
+        const dist = Math.abs(item.col - aiTile.col) + Math.abs(item.row - aiTile.row);
+        if (dist < bestDist) {
+            bestDist = dist;
+            best = { item, dir: pathDir };
+        }
+    }
+
+    if (!best || bestDist > 7) return null;
+    return best.dir;
+}
+
+function chooseDirectionTowardTile(ai, targetCol, targetRow, allowRisk = false) {
+    return findPathDirection(ai, targetCol, targetRow, [], allowRisk);
+}
+
+function findNearestBoxAttackDirection(ai) {
+    const start = getPlayerTile(ai);
+    const playerTile = getPlayerTile(players[0]);
+    const queue = [{ col: start.col, row: start.row, first: null, depth: 0 }];
+    const visited = new Set([`${start.col},${start.row}`]);
+    let best = null;
+    let bestScore = Infinity;
+
+    while (queue.length) {
+        const cur = queue.shift();
+
+        if (cur.depth > 0 && getAdjacentBreakableBoxes(cur.col, cur.row).length > 0 && !isDangerTile(cur.col, cur.row)) {
+            const distToPlayer = Math.abs(playerTile.col - cur.col) + Math.abs(playerTile.row - cur.row);
+            const score = cur.depth * 3 + distToPlayer;
+            if (score < bestScore) {
+                bestScore = score;
+                best = cur.first;
+            }
+        }
+
+        if (cur.depth >= 12) continue;
+
+        const dirs = orderedDirsToward(cur.col, cur.row, playerTile.col, playerTile.row);
+        for (const d of dirs) {
+            const nc = cur.col + d.dx;
+            const nr = cur.row + d.dy;
+            const key = `${nc},${nr}`;
+            if (visited.has(key)) continue;
+            if (!isWalkableTile(nc, nr, [], start)) continue;
+            if (isDangerTile(nc, nr)) continue;
+
+            visited.add(key);
+            queue.push({
+                col: nc,
+                row: nr,
+                first: cur.first || d,
+                depth: cur.depth + 1
+            });
+        }
+    }
+
+    return best;
+}
+
+function chooseHuntDirection(ai) {
+    const target = getPlayerTile(players[0]);
+
+    // 先嘗試用 BFS 追玩家，不要用單步貪婪，避免上下來回抖動。
+    const direct = chooseDirectionTowardTile(ai, target.col, target.row, false);
+    if (direct) return direct;
+
+    // 被木箱隔開時，先走到能炸木箱的位置。
+    const boxDir = findNearestBoxAttackDirection(ai);
+    if (boxDir) return boxDir;
+
+    // 最後才隨機找安全方向，不要停住。
+    const safe = findSafeMove(ai);
+    if (safe) return safe;
+
+    const dirs = [
+        { dx: 0, dy: -1 },
+        { dx: 0, dy: 1 },
+        { dx: -1, dy: 0 },
+        { dx: 1, dy: 0 }
+    ];
+    const t = getPlayerTile(ai);
+    const movable = dirs.filter(d => isWalkableTile(t.col + d.dx, t.row + d.dy) && !isImmediateDangerTile(t.col + d.dx, t.row + d.dy));
+    return movable.length ? movable[Math.floor(Math.random() * movable.length)] : { dx: 0, dy: 0 };
+}
+
+function moveAI(ai, dir) {
+    if (!dir) return;
+    const dx = dir.dx * ai.speed;
+    const dy = dir.dy * ai.speed;
+    if (dx === 0 && dy === 0) return;
+
+    let newX = Math.max(0, Math.min(ai.x + dx, COLS * TILE_SIZE - ai.width));
+    let newY = Math.max(0, Math.min(ai.y + dy, ROWS * TILE_SIZE - ai.height));
+
+    if (!ai.checkCollision(newX, ai.y)) ai.x = newX;
+    if (!ai.checkCollision(ai.x, newY)) ai.y = newY;
+}
+
+function updateAI(dt) {
+    if (gameMode !== 'AI' || !isHost || !players[1]) return;
+    const ai = players[1];
+    if (ai.state === 'DEAD') return;
+
+    if (aiBombCooldown > 0) aiBombCooldown -= dt;
+
+    if (ai.state === 'TRAPPED') {
+        ai.trapTimer -= dt;
+        if (ai.trapTimer <= 0) ai.die();
+        return;
+    }
+
+    const curTile = getPlayerTile(ai);
+    const inDanger = isDangerTile(curTile.col, curTile.row, aiEscapeExtraBombs);
+
+    // 第一優先：活下來。逃跑時鎖定目標，但允許穿過「未來爆炸線」快速離開。
+    if (aiEscapeTarget || inDanger) {
+        if (!aiEscapeTarget || isDangerTile(aiEscapeTarget.col, aiEscapeTarget.row, aiEscapeExtraBombs)) {
+            aiEscapeTarget = findSafeEscapeTarget(ai, aiEscapeExtraBombs);
+        }
+
+        if (aiEscapeTarget) {
+            aiDir = findPathDirection(ai, aiEscapeTarget.col, aiEscapeTarget.row, aiEscapeExtraBombs, true);
+            moveAI(ai, aiDir);
+
+            const afterMove = getPlayerTile(ai);
+            const reached = afterMove.col === aiEscapeTarget.col && afterMove.row === aiEscapeTarget.row;
+            const nowSafe = !isDangerTile(afterMove.col, afterMove.row, aiEscapeExtraBombs);
+
+            if (reached && nowSafe) {
+                aiEscapeTarget = null;
+                aiEscapeTimer = 0;
+                aiEscapeExtraBombs = [];
+                aiThinkTimer = 0;
+            }
+            return;
+        }
+
+        aiDir = findSafeMove(ai, aiEscapeExtraBombs);
+        moveAI(ai, aiDir);
+        return;
+    }
+
+    aiThinkTimer -= dt;
+
+    if (aiThinkTimer <= 0) {
+        aiThinkTimer = 120;
+
+        const itemDir = chooseDirectionToNearestItem(ai);
+        if (itemDir) {
+            aiDir = itemDir;
+        } else {
+            const escapePlan = getEscapePlanAfterPlacingBomb(ai);
+            const canPlace = aiBombCooldown <= 0 && ai.placedBombs < ai.maxBombs && !!escapePlan;
+            const shouldAttack = canBombHitPlayer(ai);
+            const shouldOpenPath = tileHasBreakableBoxAround(ai);
+
+            if (canPlace && (shouldAttack || shouldOpenPath)) {
+                ai.placeBomb();
+                aiBombCooldown = 2800;
+                aiEscapeTarget = escapePlan.target;
+                aiEscapeExtraBombs = [escapePlan.virtualBomb];
+                aiDir = escapePlan.firstStep;
+            } else {
+                aiDir = chooseHuntDirection(ai);
+            }
+        }
+    }
+
+    // 移動前檢查下一格，避免主動踩進目前爆炸。
+    const latestTile = getPlayerTile(ai);
+    const nextCol = latestTile.col + Math.sign(aiDir?.dx || 0);
+    const nextRow = latestTile.row + Math.sign(aiDir?.dy || 0);
+    if (inBounds(nextCol, nextRow) && isImmediateDangerTile(nextCol, nextRow)) {
+        aiEscapeTarget = findSafeEscapeTarget(ai);
+        aiEscapeExtraBombs = [];
+        aiDir = aiEscapeTarget ? findPathDirection(ai, aiEscapeTarget.col, aiEscapeTarget.row, [], true) : findSafeMove(ai);
+    }
+
+    moveAI(ai, aiDir);
+}
+
+function update(dt) {
+    if (!players.length) return;
+
+    const localIndex = getLocalPlayerIndex();
+
+    if (role === 'HOST') {
+        const localPlayer = players[0];
+        if (localPlayer.state !== 'DEAD') localPlayer.updateLocalMovement(dt);
+
+        if (gameMode === 'AI') {
+            updateAI(dt);
+        } else {
+            for (let i = 1; i < players.length; i++) {
+                const p = players[i];
+                const t = remoteTargets[p.id];
+                if (t) {
+                    p.x += (t.x - p.x) * 0.8;
+                    p.y += (t.y - p.y) * 0.8;
+                }
+            }
+        }
+
+        for (let i = bombs.length - 1; i >= 0; i--) {
+            bombs[i].update(dt);
+        }
+        for (let i = explosions.length - 1; i >= 0; i--) {
+            explosions[i].update(dt);
+            if (explosions[i].timer <= 0) explosions.splice(i, 1);
+        }
+        processPendingItems();
+        checkInteractions();
+        if (gameMode === 'PVP4') checkTeamVictory();
+
+        lastSyncTime += dt;
+        if (lastSyncTime > 30) {
+            const payload = {
+                'map': JSON.stringify(gameMap),
+                'bombs': JSON.stringify(bombs.map(serializeBomb)),
+                'items': JSON.stringify(items.map(serializeItem)),
+                'explosions': JSON.stringify(explosions.map(serializeExplosion)),
+                'status': gameState,
+                'mode': gameMode,
+                'teams': teams || null
+            };
+            players.forEach(p => {
+                payload[`p${p.id}`] = serializePlayer(p);
+            });
+            updateDoc(roomRef, payload);
+            lastSyncTime = 0;
+        }
+    } else if (localIndex >= 1) {
+        const localPlayer = players[localIndex];
+        if (localPlayer && localPlayer.state !== 'DEAD') localPlayer.updateLocalMovement(dt);
+
+        players.forEach((p, idx) => {
+            if (idx === localIndex) return;
+            const t = remoteTargets[p.id];
+            if (t) {
+                p.x += (t.x - p.x) * 0.8;
+                p.y += (t.y - p.y) * 0.8;
+            }
+        });
+
+        bombs.forEach(b => b.update(dt));
+        explosions.forEach(e => { e.timer -= dt; });
+
+        lastSyncTime += dt;
+        if (lastSyncTime > 30 && localPlayer) {
+            const slot = localIndex + 1;
+            updateDoc(roomRef, {
+                [`p${slot}.x`]: localPlayer.x,
+                [`p${slot}.y`]: localPlayer.y
+            });
+            lastSyncTime = 0;
+        }
+    } else if (role === 'SPECTATOR') {
+        bombs.forEach(b => b.update(dt));
+        explosions.forEach(e => { e.timer -= dt; });
+    }
+    
+    updateUI();
+}
+
+function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    drawMap();
+    items.forEach(i => i.draw(ctx));
+    bombs.forEach(b => b.draw(ctx));
+    explosions.forEach(e => e.draw(ctx));
+    players.slice().sort((a,b) => a.y - b.y).forEach(p => p.draw(ctx));
+}
+
+function gameLoop(timestamp) {
+    if (gameState !== 'PLAYING') return;
+    const dt = timestamp - lastFrameTime;
+    lastFrameTime = timestamp;
+    update(dt);
+    draw();
+    requestAnimationFrame(gameLoop);
+}
+
+function showScreen(id) {
+    ['screen-loading', 'screen-main', 'screen-join', 'screen-lobby', 'screen-gameover'].forEach(s => {
+        document.getElementById(s).classList.add('hidden');
+    });
+    document.getElementById(id).classList.remove('hidden');
+}
+
+function generateRoomCode() {
+    return Math.random().toString(36).substring(2, 6).toUpperCase();
+}
+
+function chooseRandomMapIndex() {
+    if (MAP_VARIANTS.length <= 1) return 0;
+    let next = Math.floor(Math.random() * MAP_VARIANTS.length);
+    // 盡量不要連續兩局抽到同一張，避免看起來像地圖沒有隨機。
+    if (next === currentMapIndex) {
+        next = (next + 1 + Math.floor(Math.random() * (MAP_VARIANTS.length - 1))) % MAP_VARIANTS.length;
+    }
+    return next;
+}
+
+function getRandomMap() {
+    currentMapIndex = chooseRandomMapIndex();
+    return MAP_VARIANTS[currentMapIndex].map(row => [...row]);
+}
+
+function clearSpawnArea(map, col, row) {
+    const spots = [
+        [col, row], [col + 1, row], [col - 1, row], [col, row + 1], [col, row - 1]
+    ];
+    spots.forEach(([c, r]) => {
+        if (r >= 0 && r < ROWS && c >= 0 && c < COLS && map[r][c] !== 1) map[r][c] = 0;
+    });
+}
+
+function initGameObjects(playerCount = 2, mapData = null) {
+    gameMap = mapData ? mapData.map(row => [...row]) : getRandomMap();
+    bombs = []; explosions = []; items = []; pendingItems = [];
+    players = [
+        new Player(1, 0, 0, '#3b82f6', '👦'),
+        new Player(2, COLS-1, ROWS-1, '#ef4444', '👧')
+    ];
+    if (playerCount >= 4) {
+        players.push(new Player(3, COLS-1, 0, '#f97316', '🧑'));
+        players.push(new Player(4, 0, ROWS-1, '#a855f7', '👩'));
+    }
+
+    clearSpawnArea(gameMap, 0, 0);
+    clearSpawnArea(gameMap, COLS-1, ROWS-1);
+    if (playerCount >= 4) {
+        clearSpawnArea(gameMap, COLS-1, 0);
+        clearSpawnArea(gameMap, 0, ROWS-1);
+    }
+
+    players.forEach(p => {
+        remoteTargets[p.id] = { x: p.x, y: p.y };
+    });
+    drawMap();
+}
+
+function makeRandomTeams() {
+    const ids = [1,2,3,4].sort(() => Math.random() - 0.5);
+    return {
+        [ids[0]]: 'A',
+        [ids[1]]: 'A',
+        [ids[2]]: 'B',
+        [ids[3]]: 'B'
+    };
+}
+
+function triggerGameOver(wId) {
+    gameState = 'GAMEOVER';
+    winnerId = wId;
+    playSound('win');
+    document.getElementById('ui-layer').style.display = 'flex';
+    showScreen('screen-gameover');
+    
+    const title = document.getElementById('gameover-title');
+    title.innerHTML = typeof winnerId === 'string' ? `🏆 ${winnerId} 獲勝！` : `🏆 玩家 ${winnerId} 獲勝！`;
+    title.className = `text-7xl font-bold mb-8 drop-shadow-lg text-center ${winnerId === 1 ? 'text-blue-400' : 'text-red-400'}`;
+
+    if (isHost && roomRef) {
+        updateDoc(roomRef, { status: 'GAMEOVER', winner: winnerId });
+    }
+}
+
+function startMatch() {
+    gameState = 'PLAYING';
+    document.getElementById('ui-layer').style.display = 'none';
+    
+    document.getElementById('p1-card').classList.toggle('opacity-50', role === 'GUEST');
+    document.getElementById('p2-card').classList.toggle('opacity-50', role === 'HOST');
+    if (role === 'SPECTATOR') {
+        document.getElementById('p1-card').classList.remove('opacity-50');
+        document.getElementById('p2-card').classList.remove('opacity-50');
+    }
+
+    const modeText = gameMode === 'AI' ? 'AI 對戰' : (gameMode === 'PVP4' ? '4人2對2' : '雙人對戰');
+    const roleText = role === 'HOST' ? '玩家1' : (role === 'GUEST' ? '玩家2' : (role === 'P3' ? '玩家3' : (role === 'P4' ? '玩家4' : '觀戰中')));
+    if (roomId) setRoomInfo(`房號：${roomId}｜${modeText}｜${roleText}`);
+
+    lastFrameTime = performance.now();
+    requestAnimationFrame(gameLoop);
+}
+
+async function createRoom(mode) {
+    await initAudio();
+    roomId = generateRoomCode();
+    isHost = true;
+    role = 'HOST';
+    gameMode = mode;
+    gameState = mode === 'AI' ? 'PLAYING' : 'WAITING';
+    roomRef = doc(roomsCollection, roomId);
+    lastP2BombReq = 0;
+    p2BombReqCounter = 0;
+    localBombReqCounter = 0;
+    lastBombReqs = { 2: 0, 3: 0, 4: 0 };
+    aiThinkTimer = 0;
+    aiBombCooldown = 0;
+    aiDir = { dx: 0, dy: 0 };
+    aiEscapeTarget = null;
+    aiEscapeTimer = 0;
+    aiEscapeExtraBombs = [];
+    teams = null;
+    
+    const playerCount = mode === 'PVP4' ? 4 : 2;
+    initGameObjects(playerCount);
+
+    const docData = {
+        host: userId,
+        guest: mode === 'AI' ? 'AI' : null,
+        p3User: null,
+        p4User: null,
+        spectators: [],
+        mode: mode,
+        aiEnabled: mode === 'AI',
+        teams: null,
+        status: mode === 'AI' ? 'PLAYING' : 'WAITING',
+        mapIndex: currentMapIndex,
+        map: JSON.stringify(gameMap), bombs: '[]', items: '[]', explosions: '[]',
+        p1: serializePlayer(players[0]),
+        p2: serializePlayer(players[1]),
+        p2BombReq: 0, p3BombReq: 0, p4BombReq: 0,
+        winner: null
+    };
+    if (mode === 'PVP4') {
+        docData.p3 = serializePlayer(players[2]);
+        docData.p4 = serializePlayer(players[3]);
+    }
+
+    await setDoc(roomRef, docData);
+
+    document.getElementById('display-room-code').innerText = roomId;
+    unsubscribe = onSnapshot(roomRef, handleNetworkUpdate);
+
+    if (mode === 'AI') {
+        startMatch();
+    } else {
+        const label = mode === 'PVP4' ? '4人2對2｜等待玩家加入' : '雙人對戰｜等待玩家2加入';
+        setRoomInfo(`房號：${roomId}｜${label}`);
+        showScreen('screen-lobby');
+    }
+}
+
+document.getElementById('btn-create').addEventListener('click', async () => {
+    await createRoom('PVP');
+});
+
+document.getElementById('btn-create-ai').addEventListener('click', async () => {
+    await createRoom('AI');
+});
+
+document.getElementById('btn-create-4p').addEventListener('click', async () => {
+    await createRoom('PVP4');
+});
+
+document.getElementById('btn-show-join').addEventListener('click', async () => {
+    await initAudio();
+    showScreen('screen-join');
+});
+
+document.getElementById('btn-back-join').addEventListener('click', () => { showScreen('screen-main'); });
+document.getElementById('btn-cancel-lobby').addEventListener('click', async () => {
+    if(unsubscribe) unsubscribe();
+    if(isHost && roomRef) await deleteDoc(roomRef);
+    showScreen('screen-main');
+});
+document.getElementById('btn-back-main').addEventListener('click', () => { showScreen('screen-main'); });
+
+document.getElementById('btn-rematch').addEventListener('click', async () => {
+    if (role !== 'HOST' || !roomRef) {
+        alert('只有房主可以直接開同房再來一場，其他玩家會自動看到新局。');
+        return;
+    }
+    await restartSameRoom();
+});
+
+document.getElementById('btn-join').addEventListener('click', async () => {
+    const code = document.getElementById('join-code').value.toUpperCase();
+    if(code.length !== 4) return;
+    
+    roomRef = doc(roomsCollection, code);
+    const snap = await getDoc(roomRef);
+    
+    if (!snap.exists()) {
+        document.getElementById('join-error').innerText = '找不到房間！';
+        document.getElementById('join-error').classList.remove('hidden');
+        return;
+    }
+
+    const data = snap.data();
+    roomId = code;
+    gameMode = data.mode || 'PVP';
+    isHost = false;
+    const playerCount = gameMode === 'PVP4' ? 4 : 2;
+    initGameObjects(playerCount, JSON.parse(data.map || JSON.stringify(INITIAL_MAP)));
+    document.getElementById('join-error').classList.add('hidden');
+
+    if (gameMode === 'PVP' && data.status === 'WAITING' && !data.guest) {
+        role = 'GUEST';
+        await updateDoc(roomRef, { guest: userId, status: 'PLAYING' });
+        unsubscribe = onSnapshot(roomRef, handleNetworkUpdate);
+        startMatch();
+        return;
+    }
+
+    if (gameMode === 'PVP4' && data.status === 'WAITING') {
+        let slot = null;
+        const updates = {};
+        if (!data.guest) {
+            slot = 2;
+            updates.guest = userId;
+        } else if (!data.p3User) {
+            slot = 3;
+            updates.p3User = userId;
+        } else if (!data.p4User) {
+            slot = 4;
+            updates.p4User = userId;
+        }
+
+        if (slot) {
+            role = playerRoleFromSlot(slot);
+            const filledCount = [data.host, updates.guest || data.guest, updates.p3User || data.p3User, updates.p4User || data.p4User].filter(Boolean).length;
+            if (filledCount >= 4) {
+                const newTeams = makeRandomTeams();
+                updates.teams = newTeams;
+                updates.status = 'PLAYING';
+                teams = newTeams;
+            }
+            await updateDoc(roomRef, updates);
+            unsubscribe = onSnapshot(roomRef, handleNetworkUpdate);
+            if (updates.status === 'PLAYING') startMatch();
+            else {
+                setRoomInfo(`房號：${roomId}｜4人2對2｜${role === 'GUEST' ? '玩家2' : role === 'P3' ? '玩家3' : '玩家4'}｜等待滿4人`);
+                showScreen('screen-lobby');
+            }
+            return;
+        }
+    }
+
+    if (data.status === 'PLAYING' || data.status === 'WAITING') {
+        role = 'SPECTATOR';
+        try {
+            await updateDoc(roomRef, { spectators: arrayUnion(userId) });
+        } catch(e) {
+            console.warn('觀戰者清單寫入失敗，但仍可觀戰', e);
+        }
+        unsubscribe = onSnapshot(roomRef, handleNetworkUpdate);
+        if (data.status === 'PLAYING') startMatch();
+        else showScreen('screen-lobby');
+        setRoomInfo(`房號：${roomId}｜${gameMode === 'AI' ? 'AI 對戰' : (gameMode === 'PVP4' ? '4人2對2' : '雙人對戰')}｜觀戰中`);
+        return;
+    }
+
+    document.getElementById('join-error').innerText = '這個房間已結束！';
+    document.getElementById('join-error').classList.remove('hidden');
+});
+
+// Copy Room Code to clipboard
+document.getElementById('display-room-code').addEventListener('click', () => {
+    const code = document.getElementById('display-room-code').innerText;
+    try {
+        const ta = document.createElement("textarea");
+        ta.value = code; document.body.appendChild(ta);
+        ta.select(); document.execCommand("Copy"); ta.remove();
+        alert("已複製代碼！");
+    } catch(e){}
+});
+
+function syncAuthoritativeWorld(data, includePositions = false) {
+    const playerCount = (data.mode || gameMode) === 'PVP4' ? 4 : 2;
+    if (!players.length || players.length !== playerCount) initGameObjects(playerCount, JSON.parse(data.map || JSON.stringify(INITIAL_MAP)));
+
+    for (let i = 1; i <= playerCount; i++) {
+        const pdata = data[`p${i}`];
+        if (!pdata || !players[i-1]) continue;
+        applyPlayerData(players[i-1], pdata, includePositions);
+        remoteTargets[i] = { x: pdata.x ?? players[i-1].x, y: pdata.y ?? players[i-1].y };
+    }
+
+    teams = data.teams || teams;
+    currentMapIndex = data.mapIndex ?? currentMapIndex;
+    gameMap = JSON.parse(data.map || JSON.stringify(gameMap));
+    bombs = JSON.parse(data.bombs || '[]').map(reconstructBomb);
+    items = JSON.parse(data.items || '[]').map(i => new Item(i.col, i.row, i.type, i.creationTime));
+    explosions = JSON.parse(data.explosions || '[]').map(reconstructExplosion);
+}
+
+async function restartSameRoom() {
+    if (!isHost || !roomRef) return;
+    const playerCount = gameMode === 'PVP4' ? 4 : 2;
+    initGameObjects(playerCount);
+    winnerId = null;
+    gameState = gameMode === 'PVP' ? 'PLAYING' : 'PLAYING';
+    aiThinkTimer = 0;
+    aiBombCooldown = 0;
+    aiEscapeTarget = null;
+    aiEscapeExtraBombs = [];
+    lastBombReqs = { 2: 0, 3: 0, 4: 0 };
+    lastP2BombReq = 0;
+    localBombReqCounter = 0;
+    if (gameMode === 'PVP4') teams = makeRandomTeams();
+
+    const payload = {
+        status: 'PLAYING',
+        winner: null,
+        mapIndex: currentMapIndex,
+        map: JSON.stringify(gameMap),
+        bombs: '[]',
+        items: '[]',
+        explosions: '[]',
+        p2BombReq: 0,
+        p3BombReq: 0,
+        p4BombReq: 0,
+        teams: teams || null,
+        mode: gameMode,
+        roundId: Date.now()
+    };
+    players.forEach(p => payload[`p${p.id}`] = serializePlayer(p));
+    document.getElementById('ui-layer').style.display = 'none';
+    await updateDoc(roomRef, payload);
+    startMatch();
+}
+
+function handleNetworkUpdate(docSnap) {
+    const data = docSnap.data();
+    if (!data) return;
+    gameMode = data.mode || gameMode;
+    teams = data.teams || teams;
+
+    if (data.status === 'PLAYING' && gameState !== 'PLAYING') {
+        syncAuthoritativeWorld(data, role === 'SPECTATOR');
+        startMatch();
+    } else if (data.status === 'GAMEOVER' && gameState === 'PLAYING') {
+        triggerGameOver(data.winner);
+    }
+
+    if (gameState !== 'PLAYING') return;
+
+    if (role === 'HOST') {
+        const playerCount = gameMode === 'PVP4' ? 4 : 2;
+        if (gameMode !== 'AI') {
+            for (let i = 2; i <= playerCount; i++) {
+                const pdata = data[`p${i}`];
+                if (pdata) remoteTargets[i] = { x: pdata.x, y: pdata.y };
+            }
+        }
+        if (gameMode !== 'AI') {
+            for (let i = 2; i <= playerCount; i++) {
+                const field = `p${i}BombReq`;
+                const val = data[field] || 0;
+                if (val > (lastBombReqs[i] || 0)) {
+                    const diff = val - (lastBombReqs[i] || 0);
+                    for (let j = 0; j < diff; j++) {
+                        const p = players[i-1];
+                        if (p && p.placedBombs < p.maxBombs) p.placeBomb(true);
+                    }
+                    lastBombReqs[i] = val;
+                    if (i === 2) lastP2BombReq = val;
+                }
+            }
+        }
+    } else if (role === 'GUEST' || role === 'P3' || role === 'P4') {
+        const localIndex = getLocalPlayerIndex();
+        const playerCount = gameMode === 'PVP4' ? 4 : 2;
+        for (let i = 1; i <= playerCount; i++) {
+            const pdata = data[`p${i}`];
+            if (!pdata || !players[i-1]) continue;
+            remoteTargets[i] = { x: pdata.x, y: pdata.y };
+            applyPlayerData(players[i-1], pdata, i - 1 !== localIndex);
+        }
+        gameMap = JSON.parse(data.map || JSON.stringify(gameMap));
+        bombs = JSON.parse(data.bombs || '[]').map(reconstructBomb);
+        items = JSON.parse(data.items || '[]').map(i => new Item(i.col, i.row, i.type, i.creationTime));
+        explosions = JSON.parse(data.explosions || '[]').map(reconstructExplosion);
+    } else if (role === 'SPECTATOR') {
+        syncAuthoritativeWorld(data, true);
+    }
+}
+
+window.onload = async () => {
+    try {
+        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+            await signInWithCustomToken(auth, __initial_auth_token);
+        } else {
+            await signInAnonymously(auth);
+        }
+        userId = auth.currentUser.uid;
+        showScreen('screen-main');
+    } catch (e) {
+        console.error("Auth Error", e);
+        document.getElementById('screen-loading').innerText = "連線失敗，請重新整理頁面。";
+    }
+};
+
+</script>
+</body>
+</html>
