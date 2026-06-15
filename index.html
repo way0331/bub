@@ -624,8 +624,8 @@ function update(dt) {
     if (localPlayer.state !== 'DEAD') localPlayer.updateLocalMovement(dt);
 
     // Remote Interpolation (Smooth network movement)
-    remotePlayer.x += (remoteTarget.x - remotePlayer.x) * 0.3;
-    remotePlayer.y += (remoteTarget.y - remotePlayer.y) * 0.3;
+    remotePlayer.x += (remoteTarget.x - remotePlayer.x) * 0.5;
+    remotePlayer.y += (remoteTarget.y - remotePlayer.y) * 0.5;
 
     if (isHost) {
         for (let i = bombs.length - 1; i >= 0; i--) {
